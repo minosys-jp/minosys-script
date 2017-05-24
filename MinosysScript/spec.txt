@@ -1,0 +1,59 @@
+*** LangServer 仕様 ***
+C の演算子をサポート
+class 文をサポート
+static 変数をサポート
+連想配列をサポート
+通常配列をサポート
+予約語:
+if, else, for, while, do, break, continue, return
+import, class, global, new
+init, get, post, put
+$, $$, $@: 変数、関数指定
+
+例:
+<<test.msc>>
+// class はパッケージごとにローカライズされる
+class Test {
+  static $st = 0;
+  var $x, $y, $title;
+
+  function set($x, $y) {
+    this.$x = $x;
+    this.$y = $y;
+  }
+  function title() {
+    return $title;
+  }
+};
+
+function create($x, $y, $title) {
+  $t = new Test;
+  $t.set($x, $y);
+  $t.$title = $title;
+  return $t;
+}
+
+<<html.msc>>
+import "test";
+
+init() {
+  global $test = test.create(0, 0, "now testing");
+}
+
+function get($hash) {
+
+}
+
+function post($hash, $file) {
+}
+
+<!DOCTYPE html>
+<html>
+<head>
+<title>$test.title()</title>
+</head>
+<body>
+Current ($test.$x, $test.$y)
+</body>
+</html>
+
