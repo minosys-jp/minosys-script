@@ -53,7 +53,21 @@ struct VarKey {
   bool operator == (const VarKey &k) const;
   bool operator != (const VarKey &k) const;
   std::string toString() const;
-  struct Hash;
+  struct Hash {
+    size_t operator()(const VarKey &v) const {
+      switch(v.vtype) {
+      case VT_INT:
+        return std::hash<int>()(v.u.inum);
+
+      case VT_DNUM:
+        return std::hash<double>()(v.u.dnum);
+
+      case VT_STRING:
+        return std::hash<std::string>()(*v.u.str);
+      }
+      return 0;
+    }
+  };
 };
 
 struct Var {
@@ -65,15 +79,15 @@ struct Var {
   Ptr<std::pair<Ptr<Var>, std::string> > member;
   Ptr<Instance> inst;
   void *pointer;
-  std::unordered_map<VarKey, Ptr<Var>, VarKey::Hash> array;
+  std::unordered_map<VarKey, Ptr<Var>, VarKey::Hash> arrayhash;
 
   Var() : vtype(VT_NULL) {}
   Var(int inum) : vtype(VT_INT) { this->inum = inum; }
   Var(double dnum) : vtype(VT_DNUM) { this->dnum = dnum; }
   Var(const std::string &c) : vtype(VT_STRING),  str(c) {}
   Var(Instance *i) : vtype(VT_INST), inst(i) {}
-  Var(const std::pair<std::string, std::string> &fnpair) : vtype(VT_FUNC), func(fnpair) {}
-  Var(const std::pair<Ptr<Var>, std::string> &mpair) : vtype(VT_MEMBER), member(mpair) {}
+  Var(const Ptr<std::pair<std::string, std::string> > &fnpair) : vtype(VT_FUNC), func(fnpair) {}
+  Var(const Ptr<std::pair<Ptr<Var>, std::string> > &mpair) : vtype(VT_MEMBER), member(mpair) {}
   Var(const Var &v);
   ~Var();
   Var &operator = (const Var &v);
@@ -149,7 +163,7 @@ class Engine {
   std::unordered_map<std::string, Ptr<Var> > globalvars;
   std::vector<std::unordered_map<std::string, Ptr<Var> > > vars;
   std::vector<int> varmark;
-  std::vector<Var> paramstack;
+  std::vector<Ptr<Var> > paramstack;
   std::vector<int> topmark;
   std::vector<Content *> callstack;
   std::vector<std::pair<std::string, std::string> > headers;

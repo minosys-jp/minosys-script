@@ -34,22 +34,8 @@ string VarKey::toString() const {
   case VT_STRING:
     return *this->u.str;
   }
+  return "";
 }
-
-struct VarKey::Hash {
-  size_t operator()(const VarKey &k) const {
-    switch(k.vtype) {
-    case VT_INT:
-      return hash<int>()(k.u.inum);
-
-    case VT_DNUM:
-      return hash<double>()(k.u.dnum);
-
-    case VT_STRING:
-      return hash<string>()(*k.u.str);
-    }
-  }
-};
 
 Var::Var(const Var &v) : vtype(v.vtype) {
   switch (vtype) {
@@ -77,7 +63,7 @@ Var::Var(const Var &v) : vtype(v.vtype) {
     break;
 
   case VT_ARRAY:
-    this->array = new unordered_map<VarKey, Var, VarKey::Hash>(v.array);
+    this->arrayhash = v.arrayhash;
     break;
 
   case VT_FUNC:
@@ -118,7 +104,7 @@ Var & Var::operator = (const Var &v) {
     break;
 
   case VT_ARRAY:
-    this->array = v.array;
+    this->arrayhash = v.arrayhash;
     break;
   }
 }
@@ -151,7 +137,7 @@ Var *Var::clone() {
   case VT_ARRAY:
     v = new Var();
     v->vtype = VT_ARRAY;
-    v->array = array;
+    v->arrayhash = arrayhash;
     return  v;
 
   case VT_FUNC:
@@ -247,7 +233,7 @@ Ptr<Var> PackageMinosys::evaluate(Content *c) {
 Ptr<Var> PackageMinosys::typefunc(const std::vector<Ptr<Var> > &args) {
   Var *v;
   if (!args.empty()) {
-    v = new Var((int)args[0].getvalue().vtype);
+    v = new Var((int)args[0].get()->vtype);
   } else {
     v = new Var(-1);
   }
@@ -257,69 +243,69 @@ Ptr<Var> PackageMinosys::typefunc(const std::vector<Ptr<Var> > &args) {
 
 Ptr<Var> PackageMinosys::convertfunc(const std::vector<Ptr<Var> > &args) {
   if (args.size() < 2
-    || args[1].getvalue().vtype != VT_INT) {
-    eng->paramstack.push_back(args[0].getvalue().clone());
+    || args[1].get()->vtype != VT_INT) {
+    eng->paramstack.push_back(args[0].get()->clone());
   } else {
-    switch (args[1].getvalue().inum) {
+    switch (args[1].get()->inum) {
     case VT_INT:
-      switch (args[0].getvalue().vtype) {
+      switch (args[0].get()->vtype) {
       case VT_INT:
-        eng->paramstack.push_back(new Var(args[0].getvalue().inum));
+        eng->paramstack.push_back(new Var(args[0].get()->inum));
         break;
 
       case VT_DNUM:
-        eng->paramstack.push_back(new Var((int)args[0].getvalue().dnum));
+        eng->paramstack.push_back(new Var((int)args[0].get()->dnum));
         break;
 
       case VT_STRING:
-        eng->paramstack.push_back(new Var(atoi(args[0].getvalue().str.c_str())));
+        eng->paramstack.push_back(new Var(atoi(args[0].get()->str.c_str())));
         break;
 
       default:
-        eng->paramstack.push_back(args[0].getvalue().clone());
+        eng->paramstack.push_back(args[0].get()->clone());
       }
       break;
 
     case VT_DNUM:
-      switch (args[0].getvalue().vtype) {
+      switch (args[0].get()->vtype) {
       case VT_INT:
-        eng->paramstack.push_back(new Var((double)args[0].getvalue().inum));
+        eng->paramstack.push_back(new Var((double)args[0].get()->inum));
         break;
 
       case VT_DNUM:
-        eng->paramstack.push_back(Var(args[0].getvalue().dnum));
+        eng->paramstack.push_back(new Var(args[0].get()->dnum));
         break;
 
       case VT_STRING:
-        eng->paramstack.push_back(new Var(atof(args[0].getvalue().str.c_str())));
+        eng->paramstack.push_back(new Var(atof(args[0].get()->str.c_str())));
         break;
 
       default:
-        eng->paramstack.push_back(args[0].getvalue().clone());
+        eng->paramstack.push_back(args[0].get()->clone());
       }
       break;
 
     case VT_STRING:
-      switch (args[0].getvalue().vtype) {
+      switch (args[0].get()->vtype) {
       case VT_INT:
-        eng->paramstack.push_back(new Var(to_string(args[0].getvalue().inum)));
+        eng->paramstack.push_back(new Var(to_string(args[0].get()->inum)));
         break;
 
       case VT_DNUM:
-        eng->paramstack.push_back(new Var(to_string(args[0].getvalue().dnum)));
+        eng->paramstack.push_back(new Var(to_string(args[0].get()->dnum)));
         break;
 
       case VT_STRING:
-        eng->paramstack.push_back(new Var(args[0].getvalue().str));
+        eng->paramstack.push_back(new Var(args[0].get()->str));
         break;
 
       default:
-        eng->paramstack.push_back(args[0].getvalue().clone());
+        eng->paramstack.push_back(args[0].get()->clone());
       }
       break;
 
     default:
-      eng->paramstack.push_back(args[0].getvalue().clone());
+      eng->paramstack.push_back(args[0].get()->clone());
     }
   }
   return eng->paramstack.back();
@@ -329,26 +315,26 @@ void PackageMinosys::printfunc(const std::vector<Ptr<Var> > &args) {
   int count = 0;
 
   for (auto p = args.begin(); p != args.end(); ++p) {
-    switch (p->getvalue().vtype) {
+    switch (p->get()->vtype) {
     case VT_INT:
-      printf("%d", p->getvalue().inum);
+      printf("%d", p->get()->inum);
       break;
 
     case VT_DNUM:
-      printf("%g", p->getvalue().dnum);
+      printf("%g", p->get()->dnum);
       break;
 
     case VT_STRING:
-      printf("%.*s", (int)p->getvalue().str.size(), p->getvalue().str.data());
+      printf("%.*s", (int)p->get()->str.size(), p->get()->str.data());
       break;
 
     case VT_INST:
       {
         vector<Ptr<Var> > args;
-        Var *r = this->start("toString", args);
-        if (r) {
+        Ptr<Var> r = this->start("toString", args);
+        if (!r.empty()) {
           vector<Ptr<Var> > args;
-          args.push_back(r->clone());
+          args.push_back(r.get()->clone());
           printfunc(args);
           eng->paramstack.pop_back();
         }
@@ -357,14 +343,14 @@ void PackageMinosys::printfunc(const std::vector<Ptr<Var> > &args) {
 
     case VT_ARRAY:
       printf("{");
-      for (auto pc = p->getvalue().array.begin(); pc != p->getvalue().array.end(); ++pc, ++count) {
+      for (auto pc = p->get()->arrayhash.begin(); pc != p->get()->arrayhash.end(); ++pc, ++count) {
         if (count) {
           printf(",");
         }
-        string s = p->first.toString();
+        string s = pc->first.toString();
         printf("%.*s: ", (int)s.size(), s.data());
         vector<Ptr<Var> > args;
-        args.push_back(p->second);
+        args.push_back(pc->second);
         printfunc(args);
       }
       printf("}");
@@ -372,8 +358,8 @@ void PackageMinosys::printfunc(const std::vector<Ptr<Var> > &args) {
 
     case VT_FUNC:
       {
-        string pac = p->getvalue().func.first;
-        string fname = p->getvalue.func.second;
+        const string &pac = p->get()->func.get()->first;
+        const string &fname = p->get()->func.get()->second;
         if (pac.empty()) {
           printf("%.*s", (int)fname.size(), fname.data());
         } else {
@@ -385,9 +371,9 @@ void PackageMinosys::printfunc(const std::vector<Ptr<Var> > &args) {
     case VT_MEMBER:
       {
         vector<Ptr<Var> > args;
-        args.push_back(p->getvalue().member.first);
+        args.push_back(p->get()->member.get()->first);
         printfunc(args);
-        string &mem = p->getvalue().member.second;
+        string &mem = p->get()->member.get()->second;
         printf(".%.*s", (int)mem.size(), mem.data());
       }
       break;
@@ -401,17 +387,17 @@ void PackageMinosys::printfunc(const std::vector<Ptr<Var> > &args) {
 void PackageMinosys::exitfunc(const std::vector<Ptr<Var> > &args) {
   int code = 0;
   if (!args.empty()) {
-    switch (args[0].vtype) {
+    switch (args[0].get()->vtype) {
     case VT_INT:
-      code = args[0].getvalue().inum;
+      code = args[0].get()->inum;
       break;
 
     case VT_DNUM:
-      code = (int)args[0].getvalue().dnum;
+      code = (int)args[0].get()->dnum;
       break;
 
     case VT_STRING:
-      code = atoi(args[0].getvalue().str.c_str());
+      code = atoi(args[0].get()->str.c_str());
       break;
     }
   }
@@ -512,7 +498,7 @@ bool Engine::analyzePackage(const string &pacname, bool current) {
     auto pa = ar->map.find(pacname);
     if (pa != ar->map.end()) {
       // アーカイブに発見; minosys script でなければならない
-      string s = ar->map.findMap(pacname);
+      string s = ar->findMap(pacname);
       LexString lex(s.data(), (int)s.size());
       ContentTop *top = new ContentTop();
       if (top->yylex(&lex)) {
@@ -549,20 +535,25 @@ bool Engine::analyzePackage(const string &pacname, bool current) {
       }
       dlclose(d);
     }
-    LexFile lexf(pt.data(), (int)pt.size());
-    ContentTop *top = new ContentTop();
-    if (top->yylex(&lexf)) {
-      // minosys script を発見
-      PackageMinosys *pm = new PackageMinosys();
-      pm->ptype = PackageBase::PT_MINOSYS;
-      pm->name = pacname;
-      pm->path = pt;
-      pm->top = top;
-      packages[pacname] = pm;
-      if (current) {
-        packages[""] = packages[pacname];
+    FILE *f = fopen(pt.c_str(), "r");
+    if (f) {
+      LexFile lexf(f);
+      ContentTop *top = new ContentTop();
+      if (top->yylex(&lexf)) {
+        fclose(f);
+        // minosys script を発見
+        PackageMinosys *pm = new PackageMinosys();
+        pm->ptype = PackageBase::PT_MINOSYS;
+        pm->name = pacname;
+        pm->path = pt;
+        pm->top = top;
+        packages[pacname] = pm;
+        if (current) {
+          packages[""] = packages[pacname];
+        }
+        return true;
       }
-      return true;
+      fclose(f);
     }
   }
   return false;
@@ -592,7 +583,7 @@ Var *Engine::searchVar(const string &vname) {
     auto p = map.find("this");
     if (p != map.end()) {
       // instance found
-      Instance *inst = &p->second.inst.getvalue();
+      Instance *inst = &p->second.getvalue().inst.getvalue();
       auto pi = inst->vars.find(vname);
       if (pi != inst->vars.end()) {
         return &pi->second.getvalue();
