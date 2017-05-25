@@ -126,7 +126,7 @@ class PackageMinosys : public PackageBase {
    Ptr<Var> convertfunc(const std::vector<Ptr<Var> > &args);
    void printfunc(const std::vector<Ptr<Var> > &args);
    void exitfunc(const std::vector<Ptr<Var> > &args);
-   Ptr<Var> callfunc(Content *c);
+   Ptr<Var> callfunc(const std::string &fname, Content *c);
    Ptr<Var> evaluate(Content *c);
    ~PackageMinosys();
 };

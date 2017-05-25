@@ -213,7 +213,7 @@ Ptr<Var> PackageMinosys::start(const string &fname, vector<Ptr<Var> > &args) {
     eng->topmark.push_back(eng->paramstack.size());
     eng->callmark.push_back(eng->callstack.size());
     eng->vars.push_back(amap);
-    Ptr<Var> rv = callfunc(c);
+    Ptr<Var> rv = callfunc(fname, c);
     if (!rv.empty()) {
       if (eng->topmark.back() >= eng->paramstack.size()) {
         eng->paramstack.erase(
@@ -239,7 +239,7 @@ Ptr<Var> PackageMinosys::start(const string &fname, vector<Ptr<Var> > &args) {
   return Ptr<Var>();
 }
 
-Ptr<Var> PackageMinosys::callfunc(Content *c) {
+Ptr<Var> PackageMinosys::callfunc(const string &fname, Content *c) {
   while (c) {
     bool redo = false;
     switch (c->tag) {
@@ -293,19 +293,20 @@ Ptr<Var> PackageMinosys::callfunc(Content *c) {
       break;
 
     case LexBase::LT_BREAK:
-      if (eng->callstack.size() > eng->callmark.back()) {
-        if (!c->pc.empty() && c->pc.at(0)->tag == LexBase::LT_STRING) {
-          string label = c->pc.at(0)->op;
-          int count = eng->callstack.size() - eng->callmark.back();
-          while (count >= 0) {
-            c = eng->callstack.back();
-            eng->callstack.pop_back();
-            if (c->label == label) {
+      {
+        auto p = top->labels.find(fname);
+        if (p != top->labels.end() && !c->op.empty()) {
+          auto pl = p->second.find(c->pc.at(0)->op);
+          if (pl != p->second.end()) {
+            int mark = eng->callstack.size() - eng->callmark.back() - pl->second.nest;
+            if (mark == 0) {
+              eng->callstack.erase(eng->callstack.begin() + pl->second.nest, eng->callstack.end());
+              c = pl->second.content;
               break;
             }
-            --count;
           }
-        } else {
+        }
+        if (eng->callstack.size() > eng->callmark.back()) {
           c = eng->callstack.back();
           eng->callstack.pop_back();
         }
@@ -313,26 +314,28 @@ Ptr<Var> PackageMinosys::callfunc(Content *c) {
       break;
 
     case LexBase::LT_CONTINUE:
-      if (eng->callstack.size() > eng->callmark.back()) {
-        if (!c->pc.empty() && c->pc.at(0)->tag == LexBase::LT_STRING) {
-          string label = c->pc.at(0)->op;
-          int count = eng->callstack.size() - eng->callmark.back();
-          while (count >= 0) {
-            c = eng->callstack.back();
-            eng->callstack.pop_back();
-            if (c->label == label) {
+      {
+        auto p = top->labels.find(fname);
+        if (p != top->labels.end() && !c->op.empty()) {
+          auto pl = p->second.find(c->pc.at(0)->op);
+          if (pl != p->second.end()) {
+            int mark = eng->callstack.size() - eng->callmark.back() - pl->second.nest;
+            if (mark == 0) {
+              eng->callstack.erase(eng->callstack.begin() + pl->second.nest, eng->callstack.end());
+              c = pl->second.content;
               redo = true;
               break;
             }
-            --count;
           }
-        } else {
+        }
+        if (eng->callstack.size() > eng->callmark.back()) {
           c = eng->callstack.back();
           eng->callstack.pop_back();
           redo = true;
         }
       }
       break;
+
 
     case LexBase::LT_RETURN:
       if (c->pc.size() >= 1) {
