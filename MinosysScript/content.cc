@@ -543,7 +543,7 @@ Content *ContentTop::yylex_evalbody(LexBase *lex) {
 
 Content *ContentTop::yylex_lhs(LexBase *lex) {
   ContentToken token;
-  Content *t = NULL, *c2 = NULL;
+  Content *t = NULL;
 
   if (getContentToken(token, lex) < 0) return NULL;
   t = new Content(token.tag, token.token);
@@ -559,9 +559,10 @@ Content *ContentTop::yylex_lhs(LexBase *lex) {
            break;
          }
        } else if (token.token == ".") {
+         if (getContentToken(token, lex) < 0) break;
          Content *t2 = new Content(LexBase::LT_OP, ".");
          t2->pc.push_back(t);
-         t2->pc.push_back(yylex_lhs(lex));
+         t2->pc.push_back(new Content(token.tag, token.token));
          t = t2;
        } else {
          listContent.push_back(token);

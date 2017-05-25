@@ -126,10 +126,8 @@ class PackageMinosys : public PackageBase {
    void printfunc(const std::vector<Ptr<Var> > &args);
    void exitfunc(const std::vector<Ptr<Var> > &args);
    Ptr<Var> callfunc(Content *c);
+   Ptr<Var> evaluate(Content *c);
    ~PackageMinosys();
-
- private:
-   Ptr<Var> evaluate(Content *);
 };
 
 class PackageDlopen : public PackageBase {

@@ -1,7 +1,0 @@
-/*
- *
- */
-// line comment
-function g($x) {
-  $a = ($a++) + 3;
-}

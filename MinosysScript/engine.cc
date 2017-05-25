@@ -506,9 +506,13 @@ bool Engine::analyzePackage(const string &pacname, bool current) {
         PackageMinosys *pm = new PackageMinosys();
         pm->ptype = PackageBase::PT_MINOSYS;
         pm->top = top;
+        pm->eng = this;
         packages[pacname] = pm;
         if (current) {
           packages[""] = packages[pacname];
+        }
+        for (auto vpac = top->imports.begin(); vpac != top->imports.end(); ++vpac) {
+          analyzePackage(*vpac);
         }
         return true;
       }
@@ -527,6 +531,7 @@ bool Engine::analyzePackage(const string &pacname, bool current) {
         pd->name = pacname;
         pd->path = pt;
         pd->dlhandle = d;
+        pd->eng = this;
         packages[pacname] = pd;
         if (current) {
           packages[""] = packages[pacname];
@@ -547,9 +552,13 @@ bool Engine::analyzePackage(const string &pacname, bool current) {
         pm->name = pacname;
         pm->path = pt;
         pm->top = top;
+        pm->eng = this;
         packages[pacname] = pm;
         if (current) {
           packages[""] = packages[pacname];
+        }
+        for (auto vpac = top->imports.begin(); vpac != top->imports.end(); ++vpac) {
+          analyzePackage(*vpac);
         }
         return true;
       }

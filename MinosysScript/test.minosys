@@ -1,0 +1,7 @@
+/*
+ *
+ */
+// line comment
+function init() {
+  print("Hello, world!\n");
+}

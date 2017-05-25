@@ -193,7 +193,9 @@ LexBase::LexTag LexBase::analyze() {
       break;
 
     case 40: // 文字列定数１
-      if (c != '"') {
+      if (c == '\\') {
+        this->state = 41;
+      } else if (c != '"') {
         token.push_back(c);
       } else {
         this->state = 0;
@@ -201,13 +203,37 @@ LexBase::LexTag LexBase::analyze() {
       }
       break;
 
+    case 41: // バックスラッシュ定数
+      if (c == 'n') {
+        token.push_back('\n');
+      } else if (c == 'r') {
+        token.push_back('\r');
+      } else if (c == '\\') {
+        token.push_back('\\');
+      }
+      this->state = 40;
+      break;
+
     case 50: // 文字列定数２
-      if (c != '\'') {
+      if (c == '\\') {
+        this->state = 51;
+      } else if (c != '\'') {
         token.push_back(c);
       } else {
         this->state = 0;
         return LT_STRING;
       }
+      break;
+
+    case 51: // バックスラッシュ定数
+      if (c == 'n') {
+        token.push_back('\n');
+      } else if (c == 'r') {
+        token.push_back('\r');
+      } else if (c == '\\') {
+        token.push_back('\\');
+      }
+      this->state = 50;
       break;
 
     case 60: // 16進数
