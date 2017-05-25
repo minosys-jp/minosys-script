@@ -4,8 +4,6 @@
 #include <cstdlib>
 #include <dlfcn.h>
 
-// TODO: Ptr<Var> による Var * 部分の書き換えが必要
-
 using namespace std;
 using namespace minosys;
 
@@ -149,6 +147,40 @@ Var *Var::clone() {
   return NULL;
 }
 
+bool Var::isTrue() const {
+  switch(vtype) {
+  case VT_NULL:
+    return false;
+
+  case VT_INT:
+    return inum != 0;
+
+  case VT_DNUM:
+    return dnum != 0.0;
+
+  case VT_STRING:
+    return str != "";
+
+  case VT_INST:
+    return inst.get() != NULL;
+
+  case VT_ARRAY:
+    return !arrayhash.empty();
+
+  case VT_POINTER:
+    return pointer != NULL;
+
+  case VT_FUNC:
+    return func.get() != NULL;
+
+  case VT_MEMBER:
+    return member.get() != NULL;
+
+  default:
+    return false;
+  }
+}
+
 Var::~Var() {
 }
 
@@ -179,6 +211,7 @@ Ptr<Var> PackageMinosys::start(const string &fname, vector<Ptr<Var> > &args) {
     }
     eng->varmark.push_back(eng->vars.size());
     eng->topmark.push_back(eng->paramstack.size());
+    eng->callmark.push_back(eng->callstack.size());
     eng->vars.push_back(amap);
     Ptr<Var> rv = callfunc(c);
     if (!rv.empty()) {
@@ -194,8 +227,13 @@ Ptr<Var> PackageMinosys::start(const string &fname, vector<Ptr<Var> > &args) {
       eng->vars.begin() + eng->varmark.back(),
       eng->vars.end()
     );
+    eng->callstack.erase(
+      eng->callstack.begin() + eng->callmark.back(),
+      eng->callstack.end()
+    );
     eng->varmark.pop_back();
     eng->topmark.pop_back();
+    eng->callmark.pop_back();
     return rv;
   }
   return Ptr<Var>();
@@ -203,13 +241,99 @@ Ptr<Var> PackageMinosys::start(const string &fname, vector<Ptr<Var> > &args) {
 
 Ptr<Var> PackageMinosys::callfunc(Content *c) {
   while (c) {
+    bool redo = false;
     switch (c->tag) {
-    case LexBase::LT_BEGIN:	// TODO
-    case LexBase::LT_IF:	// TODO
-    case LexBase::LT_FOR:	// TODO
-    case LexBase::LT_WHILE:	// TODO
-    case LexBase::LT_BREAK:	// TODO
-    case LexBase::LT_CONTINUE:	// TODO
+    case LexBase::LT_BEGIN:
+      if (!c->pc.empty()) {
+        eng->callstack.push_back(c);
+        c = c->pc.at(0);
+        redo = true;
+      }
+      break;
+
+    case LexBase::LT_IF:
+      {
+        Ptr<Var> r = evaluate(c->pc.at(0));
+        eng->paramstack.pop_back();
+        if (!r.empty() && r.get()->isTrue()) {
+          eng->callstack.push_back(c);
+          c = c->pc.at(1);
+          redo = true;
+        } else if (c->pc.size() == 3) {
+          eng->callstack.push_back(c);
+          c = c->pc.at(2);
+          redo = true;
+        }
+      }
+      break;
+
+    case LexBase::LT_FOR:
+      {
+        evaluate(c->pc.at(0));
+        eng->paramstack.pop_back();
+        Ptr<Var> r = evaluate(c->pc.at(1));
+        if (!r.empty() && r.get()->isTrue()) {
+          eng->callstack.push_back(c);
+          c = c->pc.at(3);
+          redo = true;
+        }
+      }
+      break;
+
+    case LexBase::LT_WHILE:
+      {
+        Ptr<Var> r = evaluate(c->pc.at(0));
+        eng->paramstack.pop_back();
+        if (!r.empty() && r.get()->isTrue()) {
+          eng->callstack.push_back(c);
+          c = c->pc.at(1);
+          redo = true;
+        }
+      }
+      break;
+
+    case LexBase::LT_BREAK:
+      if (eng->callstack.size() > eng->callmark.back()) {
+        if (!c->pc.empty() && c->pc.at(0)->tag == LexBase::LT_STRING) {
+          string label = c->pc.at(0)->op;
+          int count = eng->callstack.size() - eng->callmark.back();
+          while (count >= 0) {
+            c = eng->callstack.back();
+            eng->callstack.pop_back();
+            if (c->label == label) {
+              break;
+            }
+            --count;
+          }
+        } else {
+          c = eng->callstack.back();
+          eng->callstack.pop_back();
+        }
+      }
+      break;
+
+    case LexBase::LT_CONTINUE:
+      if (eng->callstack.size() > eng->callmark.back()) {
+        if (!c->pc.empty() && c->pc.at(0)->tag == LexBase::LT_STRING) {
+          string label = c->pc.at(0)->op;
+          int count = eng->callstack.size() - eng->callmark.back();
+          while (count >= 0) {
+            c = eng->callstack.back();
+            eng->callstack.pop_back();
+            if (c->label == label) {
+              redo = true;
+              break;
+            }
+            --count;
+          }
+        } else {
+          c = eng->callstack.back();
+          eng->callstack.pop_back();
+          redo = true;
+        }
+      }
+      break;
+
     case LexBase::LT_RETURN:
       if (c->pc.size() >= 1) {
         return evaluate(c);
@@ -220,7 +344,36 @@ Ptr<Var> PackageMinosys::callfunc(Content *c) {
       evaluate(c);
       eng->paramstack.pop_back();
     }
+    if (redo) {
+      continue;
+    }
     c = c->next;
+    if (!c && eng->callstack.size() > eng->callmark.back()) {
+      c = eng->callstack.back();
+      eng->callstack.pop_back();
+      if (c->tag == LexBase::LT_FOR) {
+        evaluate(c->pc.at(2));
+        eng->paramstack.pop_back();
+        Ptr<Var> r = evaluate(c->pc.at(1));
+        if (!r.empty() && r.get()->isTrue()) {
+          eng->callstack.push_back(c);
+          c = c->pc.at(3);
+        } else {
+          c = c->next;
+        }
+      } else if (c->tag == LexBase::LT_WHILE) {
+        Ptr<Var> r = evaluate(c->pc.at(0));
+        eng->paramstack.pop_back();
+        if (!r.empty() && r.get()->isTrue()) {
+          eng->callstack.push_back(c);
+          c = c->pc.at(1);
+        } else {
+          c = c->next;
+        }
+      } else {
+        c = c->next;
+      }
+    }
   }
   return Ptr<Var>();
 }

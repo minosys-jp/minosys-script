@@ -327,7 +327,7 @@ Content *ContentTop::yylex_for(const string &label, LexBase *lex) {
   }
   Content *b = yylex_block(lex);
   if (c1 && c2 && c3 && b) {
-    t = new Content(LexBase::LT_TAG, "for");
+    t = new Content(LexBase::LT_FOR, "");
     t->label = label;
     t->pc.push_back(c1);
     t->pc.push_back(c2);

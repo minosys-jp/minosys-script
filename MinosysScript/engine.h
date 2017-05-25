@@ -92,6 +92,7 @@ struct Var {
   ~Var();
   Var &operator = (const Var &v);
   Var *clone();
+  bool isTrue() const;
 };
 
 class Instance {
@@ -164,6 +165,7 @@ class Engine {
   std::vector<Ptr<Var> > paramstack;
   std::vector<int> topmark;
   std::vector<Content *> callstack;
+  std::vector<int> callmark;
   std::vector<std::pair<std::string, std::string> > headers;
   Engine(const std::vector<std::string> &searchPaths) : searchPaths(searchPaths), ar(NULL) {}
   ~Engine();
