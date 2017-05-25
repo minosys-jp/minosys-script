@@ -426,9 +426,6 @@ Engine::~Engine() {
   if (ar) {
     delete ar;
   }
-  for (auto p = packages.begin(); p != packages.end(); ++p) {
-    delete p->second;
-  }
 }
 
 void Engine::setArchive(const string &arname) {
@@ -571,7 +568,7 @@ bool Engine::analyzePackage(const string &pacname, bool current) {
 Ptr<Var> Engine::start(const string &pname, const string &fname, vector<Ptr<Var> > &args) {
   auto p = packages.find(pname);
   if (p != packages.end()) {
-    return p->second->start(fname, args);
+    return p->second.getvalue().start(fname, args);
   }
   return Ptr<Var>();
 }

@@ -157,7 +157,7 @@ class Engine {
   };
   Archive *ar;
   std::vector<std::string> searchPaths;
-  std::unordered_map<std::string, PackageBase *> packages;
+  std::unordered_map<std::string, Ptr<PackageBase> > packages;
   std::unordered_map<std::string, Ptr<Var> > globalvars;
   std::vector<std::unordered_map<std::string, Ptr<Var> > > vars;
   std::vector<int> varmark;

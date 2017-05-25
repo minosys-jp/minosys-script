@@ -12,7 +12,7 @@ int main(int argc, char **argv) {
   int c;
   string ar;
 
-  while ((c = getopt("a:d:")) != -1) {
+  while ((c = getopt(argc, argv, "a:d:")) != -1) {
     switch (c) {
     case 'a':
       ar = optarg;
@@ -34,7 +34,7 @@ int main(int argc, char **argv) {
 
   Engine eng(sp);
   eng.setArchive(argv[0]);
-  if (!analyzePackage(argv[0], true)) {
+  if (!eng.analyzePackage(argv[0], true)) {
     cout << "package:" << argv[0] << " not found" << endl;
     return 1;
   }
