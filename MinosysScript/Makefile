@@ -1,10 +1,10 @@
-LIBSRC=lex.cc content.cc engine.cc
+LIBSRC=lex.cc content.cc engine.cc evaluate.cc
 LIBOBJ=$(LIBSRC:.cc=.o)
 SRC=main.cc
 OBJ=$(SRC:.cc=.o)
 LIBTARGET=libminosysscr.so
 TARGET=minosysscr
-CXXFLAGS=-g -O0 -fPIC -std=c++11
+CXXFLAGS=-g -O0 -fPIC -std=c++14
 LDFLAGS=
 LIBS=-L. -lminosysscr -ldl
 CXX=g++

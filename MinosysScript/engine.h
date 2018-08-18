@@ -5,8 +5,8 @@
 #include <unordered_map>
 #include <string>
 #include <cstdio>
+#include <memory>
 #include "content.h"
-#include "Ptr.h"
 
 namespace minosys {
 
@@ -75,23 +75,25 @@ struct Var {
   int inum;
   double dnum;
   std::string str;
-  Ptr<std::pair<std::string, std::string> > func;
-  Ptr<std::pair<Ptr<Var>, std::string> > member;
-  Ptr<Instance> inst;
+  std::pair<std::string, std::string> func;
+  std::pair<std::shared_ptr<Var>, std::string> member;
+  std::shared_ptr<Instance> inst;
   void *pointer;
-  std::unordered_map<VarKey, Ptr<Var>, VarKey::Hash> arrayhash;
+  std::unordered_map<VarKey, std::shared_ptr<Var>, VarKey::Hash> arrayhash;
 
   Var() : vtype(VT_NULL) {}
   Var(int inum) : vtype(VT_INT) { this->inum = inum; }
   Var(double dnum) : vtype(VT_DNUM) { this->dnum = dnum; }
   Var(const std::string &c) : vtype(VT_STRING),  str(c) {}
   Var(Instance *i) : vtype(VT_INST), inst(i) {}
-  Var(const Ptr<std::pair<std::string, std::string> > &fnpair) : vtype(VT_FUNC), func(fnpair) {}
-  Var(const Ptr<std::pair<Ptr<Var>, std::string> > &mpair) : vtype(VT_MEMBER), member(mpair) {}
+  Var(const std::shared_ptr<Instance> &i) : vtype(VT_INST), inst(i) {}
+  Var(const std::pair<std::string, std::string> &fnpair) : vtype(VT_FUNC), func(fnpair) {}
+  Var(const std::pair<std::shared_ptr<Var>, std::string> &mpair) : vtype(VT_MEMBER), member(mpair) {}
+  Var(const std::unordered_map<VarKey, std::shared_ptr<Var>, VarKey::Hash> ah) : vtype(VT_ARRAY), arrayhash(ah) {}
   Var(const Var &v);
   ~Var();
   Var &operator = (const Var &v);
-  Var *clone();
+  std::shared_ptr<Var> clone();
   bool isTrue() const;
 };
 
@@ -100,7 +102,7 @@ class Instance {
 
  public:
   MinosysClassDef *def;
-  std::unordered_map<std::string, Ptr<Var> > vars;
+  std::unordered_map<std::string, std::shared_ptr<Var> > vars;
   Instance() : def(NULL) {}
   Instance(const Instance &i) : def(i.def), vars(i.vars) {}
 };
@@ -114,27 +116,31 @@ class PackageBase {
    Engine *eng;
    std::string name;
    std::string path;
-   virtual Ptr<Var> start(const std::string &fname, std::vector<Ptr<Var> > &args) = 0;
+   virtual std::shared_ptr<Var> start(const std::string &fname, std::vector<std::shared_ptr<Var> > &args) = 0;
    virtual ~PackageBase() {}
 };
 
 class PackageMinosys : public PackageBase {
+ private:
+   std::shared_ptr<Var> eval_var(Content *c);
+   std::shared_ptr<Var> eval_functag(Content *c);
+
  public:
    ContentTop *top;
-   Ptr<Var> start(const std::string &fname, std::vector<Ptr<Var> > &args);
-   Ptr<Var> typefunc(const std::vector<Ptr<Var> > &args);
-   Ptr<Var> convertfunc(const std::vector<Ptr<Var> > &args);
-   void printfunc(const std::vector<Ptr<Var> > &args);
-   void exitfunc(const std::vector<Ptr<Var> > &args);
-   Ptr<Var> callfunc(const std::string &fname, Content *c);
-   Ptr<Var> evaluate(Content *c);
+   std::shared_ptr<Var> start(const std::string &fname, std::vector<std::shared_ptr<Var> > &args);
+   std::shared_ptr<Var> typefunc(const std::vector<std::shared_ptr<Var> > &args);
+   std::shared_ptr<Var> convertfunc(const std::vector<std::shared_ptr<Var> > &args);
+   void printfunc(const std::vector<std::shared_ptr<Var> > &args);
+   void exitfunc(const std::vector<std::shared_ptr<Var> > &args);
+   std::shared_ptr<Var> callfunc(const std::string &fname, Content *c);
+   std::shared_ptr<Var> evaluate(Content *c);
    ~PackageMinosys();
 };
 
 class PackageDlopen : public PackageBase {
  public:
   void *dlhandle;
-  Ptr<Var> start(const std::string &fname, std::vector<Ptr<Var> > &args);
+  std::shared_ptr<Var> start(const std::string &fname, std::vector<std::shared_ptr<Var> > &args);
   ~PackageDlopen();
 };
 
@@ -158,11 +164,11 @@ class Engine {
   };
   Archive *ar;
   std::vector<std::string> searchPaths;
-  std::unordered_map<std::string, Ptr<PackageBase> > packages;
-  std::unordered_map<std::string, Ptr<Var> > globalvars;
-  std::vector<std::unordered_map<std::string, Ptr<Var> > > vars;
+  std::unordered_map<std::string, std::shared_ptr<PackageBase> > packages;
+  std::unordered_map<std::string, std::shared_ptr<Var> > globalvars;
+  std::vector<std::unordered_map<std::string, std::shared_ptr<Var> > > vars;
   std::vector<int> varmark;
-  std::vector<Ptr<Var> > paramstack;
+  std::vector<std::shared_ptr<Var> > paramstack;
   std::vector<int> topmark;
   std::vector<Content *> callstack;
   std::vector<int> callmark;
@@ -171,8 +177,8 @@ class Engine {
   ~Engine();
   bool analyzePackage(const std::string &pacname, bool current = false);
   void setArchive(const std::string &arname);
-  Ptr<Var> start(const std::string &pname, const std::string &fname, std::vector<Ptr<Var> > &args);
-  Var *searchVar(const std::string &vname);
+  std::shared_ptr<Var> start(const std::string &pname, const std::string &fname, std::vector<std::shared_ptr<Var> > &args);
+  std::shared_ptr<Var> searchVar(const std::string &vname);
 
  private:
    void analyzeArchive(FILE *f);

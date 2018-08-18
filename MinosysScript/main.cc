@@ -41,9 +41,19 @@ int main(int argc, char **argv) {
   }
   vector<shared_ptr<Var> > args;
   shared_ptr<Var> r = eng.start(argv[0], "init", args);
-  if (r) {
-    // paramstack の最後を pop する
-    eng.paramstack.pop_back();
+  cout << "return type: " << r->vtype << endl;
+  switch (r->vtype) {
+  case VT_INT:
+    cout << "return value:" << r->inum << endl;
+    break;
+
+  case VT_DNUM:
+    cout << "return value:" << r->dnum << endl;
+    break;
+
+  case VT_STRING:
+    cout << "return value:" << r->str << endl;
+    break;
   }
   return 0;
 }

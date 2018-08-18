@@ -3,6 +3,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <dlfcn.h>
+#include <iostream>
 
 using namespace std;
 using namespace minosys;
@@ -107,44 +108,41 @@ Var & Var::operator = (const Var &v) {
   }
 }
 
-Var *Var::clone() {
-  Var *v = NULL;
-
+shared_ptr<Var> Var::clone() {
   switch (vtype) {
   case VT_NULL:
-    return new Var();
+    return make_shared<Var>();
 
   case VT_INT:
-    return new Var(inum);
+    return make_shared<Var>(inum);
 
   case VT_DNUM:
-    return new Var(dnum);
+    return make_shared<Var>(dnum);
 
   case VT_STRING:
-    return new Var(str);
+    return make_shared<Var>(str);
 
   case VT_INST:
-    return new Var(new Instance(inst.getvalue()));
+    return make_shared<Var>(inst);
 
   case VT_POINTER:
-    v = new Var();
-    v->vtype = VT_POINTER;
-    v->pointer = pointer;
-    return v;
+    {
+      shared_ptr<Var> v = make_shared<Var>();
+      v->vtype = VT_POINTER;
+      v->pointer = pointer;
+      return v;
+    }
 
   case VT_ARRAY:
-    v = new Var();
-    v->vtype = VT_ARRAY;
-    v->arrayhash = arrayhash;
-    return  v;
+    return make_shared<Var>(arrayhash);
 
   case VT_FUNC:
-    return new Var(func);
+    return make_shared<Var>(func);
 
   case VT_MEMBER:
-    return new Var(member);
+    return make_shared<Var>(member);
   }
-  return NULL;
+  return make_shared<Var>();
 }
 
 bool Var::isTrue() const {
@@ -171,10 +169,10 @@ bool Var::isTrue() const {
     return pointer != NULL;
 
   case VT_FUNC:
-    return func.get() != NULL;
+    return func.first.empty() && func.second.empty();
 
   case VT_MEMBER:
-    return member.get() != NULL;
+    return !member.first && member.second.empty();
 
   default:
     return false;
@@ -188,11 +186,11 @@ PackageMinosys::~PackageMinosys() {
   delete top;
 }
 
-Ptr<Var> PackageMinosys::start(const string &fname, vector<Ptr<Var> > &args) {
+shared_ptr<Var> PackageMinosys::start(const string &fname, vector<shared_ptr<Var> > &args) {
   auto p = top->funcs.find(fname);
  if (p != top->funcs.end()) {
     Content *c = p->second;
-    unordered_map<string, Ptr<Var> > amap;
+    unordered_map<string, shared_ptr<Var> > amap;
 
     // ビルトイン関数
     if (fname == "type") {
@@ -213,15 +211,12 @@ Ptr<Var> PackageMinosys::start(const string &fname, vector<Ptr<Var> > &args) {
     eng->topmark.push_back(eng->paramstack.size());
     eng->callmark.push_back(eng->callstack.size());
     eng->vars.push_back(amap);
-    Ptr<Var> rv = callfunc(fname, c);
-    if (!rv.empty()) {
-      if (eng->topmark.back() >= eng->paramstack.size()) {
-        eng->paramstack.erase(
-          eng->paramstack.begin() + eng->topmark.back(),
-          eng->paramstack.end() - eng->paramstack.size() - 1
-        );
-      }
-      rv = eng->paramstack.back();
+    shared_ptr<Var> rv = callfunc(fname, c);
+    if (eng->topmark.back() > eng->paramstack.size()) {
+      eng->paramstack.erase(
+        eng->paramstack.begin() + eng->topmark.back(),
+        eng->paramstack.end() - eng->paramstack.size()
+      );
     }
     eng->vars.erase(
       eng->vars.begin() + eng->varmark.back(),
@@ -236,10 +231,10 @@ Ptr<Var> PackageMinosys::start(const string &fname, vector<Ptr<Var> > &args) {
     eng->callmark.pop_back();
     return rv;
   }
-  return Ptr<Var>();
+  return make_shared<Var>();
 }
 
-Ptr<Var> PackageMinosys::callfunc(const string &fname, Content *c) {
+shared_ptr<Var> PackageMinosys::callfunc(const string &fname, Content *c) {
   while (c) {
     bool redo = false;
     switch (c->tag) {
@@ -253,9 +248,8 @@ Ptr<Var> PackageMinosys::callfunc(const string &fname, Content *c) {
 
     case LexBase::LT_IF:
       {
-        Ptr<Var> r = evaluate(c->pc.at(0));
-        eng->paramstack.pop_back();
-        if (!r.empty() && r.get()->isTrue()) {
+        shared_ptr<Var> r = evaluate(c->pc.at(0));
+        if (r && r.get()->isTrue()) {
           eng->callstack.push_back(c);
           c = c->pc.at(1);
           redo = true;
@@ -270,9 +264,8 @@ Ptr<Var> PackageMinosys::callfunc(const string &fname, Content *c) {
     case LexBase::LT_FOR:
       {
         evaluate(c->pc.at(0));
-        eng->paramstack.pop_back();
-        Ptr<Var> r = evaluate(c->pc.at(1));
-        if (!r.empty() && r.get()->isTrue()) {
+        shared_ptr<Var> r = evaluate(c->pc.at(1));
+        if (r && r->isTrue()) {
           eng->callstack.push_back(c);
           c = c->pc.at(3);
           redo = true;
@@ -282,9 +275,8 @@ Ptr<Var> PackageMinosys::callfunc(const string &fname, Content *c) {
 
     case LexBase::LT_WHILE:
       {
-        Ptr<Var> r = evaluate(c->pc.at(0));
-        eng->paramstack.pop_back();
-        if (!r.empty() && r.get()->isTrue()) {
+        shared_ptr<Var> r = evaluate(c->pc.at(0));
+        if (r && r.get()->isTrue()) {
           eng->callstack.push_back(c);
           c = c->pc.at(1);
           redo = true;
@@ -339,13 +331,12 @@ Ptr<Var> PackageMinosys::callfunc(const string &fname, Content *c) {
 
     case LexBase::LT_RETURN:
       if (c->pc.size() >= 1) {
-        return evaluate(c);
+        return evaluate(c->pc.at(0));
       }
-      return NULL;
+      return make_shared<Var>();
 
     default: // 演算子
       evaluate(c);
-      eng->paramstack.pop_back();
     }
     if (redo) {
       continue;
@@ -356,18 +347,16 @@ Ptr<Var> PackageMinosys::callfunc(const string &fname, Content *c) {
       eng->callstack.pop_back();
       if (c->tag == LexBase::LT_FOR) {
         evaluate(c->pc.at(2));
-        eng->paramstack.pop_back();
-        Ptr<Var> r = evaluate(c->pc.at(1));
-        if (!r.empty() && r.get()->isTrue()) {
+        shared_ptr<Var> r = evaluate(c->pc.at(1));
+        if (r && r.get()->isTrue()) {
           eng->callstack.push_back(c);
           c = c->pc.at(3);
         } else {
           c = c->next;
         }
       } else if (c->tag == LexBase::LT_WHILE) {
-        Ptr<Var> r = evaluate(c->pc.at(0));
-        eng->paramstack.pop_back();
-        if (!r.empty() && r.get()->isTrue()) {
+        shared_ptr<Var> r = evaluate(c->pc.at(0));
+        if (r && r.get()->isTrue()) {
           eng->callstack.push_back(c);
           c = c->pc.at(1);
         } else {
@@ -378,134 +367,118 @@ Ptr<Var> PackageMinosys::callfunc(const string &fname, Content *c) {
       }
     }
   }
-  return Ptr<Var>();
+  return make_shared<Var>();
 }
 
-Ptr<Var> PackageMinosys::evaluate(Content *c) {
-  // TODO:
-  return Ptr<Var>();
-}
-
-Ptr<Var> PackageMinosys::typefunc(const std::vector<Ptr<Var> > &args) {
-  Var *v;
+shared_ptr<Var> PackageMinosys::typefunc(const std::vector<shared_ptr<Var> > &args) {
+  int vtype = -1;
   if (!args.empty()) {
-    v = new Var((int)args[0].get()->vtype);
-  } else {
-    v = new Var(-1);
+    vtype = (int)args[0]->vtype;
   }
-  eng->paramstack.push_back(Ptr<Var>(v));
-  return eng->paramstack.back();
+  return make_shared<Var>(vtype);
 }
 
-Ptr<Var> PackageMinosys::convertfunc(const std::vector<Ptr<Var> > &args) {
+shared_ptr<Var> PackageMinosys::convertfunc(const std::vector<shared_ptr<Var> > &args) {
   if (args.size() < 2
-    || args[1].get()->vtype != VT_INT) {
-    eng->paramstack.push_back(args[0].get()->clone());
+    || args[1]->vtype != VT_INT) {
+    return args[0]->clone();
   } else {
-    switch (args[1].get()->inum) {
+    switch (args[1]->inum) {
     case VT_INT:
-      switch (args[0].get()->vtype) {
+      switch (args[0]->vtype) {
       case VT_INT:
-        eng->paramstack.push_back(new Var(args[0].get()->inum));
-        break;
+        return make_shared<Var>(args[0]->inum);
 
       case VT_DNUM:
-        eng->paramstack.push_back(new Var((int)args[0].get()->dnum));
-        break;
+        return make_shared<Var>((int)args[0]->dnum);
 
       case VT_STRING:
-        eng->paramstack.push_back(new Var(atoi(args[0].get()->str.c_str())));
-        break;
+        return make_shared<Var>(atoi(args[0]->str.c_str()));
 
       default:
-        eng->paramstack.push_back(args[0].get()->clone());
+        return args[0]->clone();
       }
       break;
 
     case VT_DNUM:
-      switch (args[0].get()->vtype) {
+      switch (args[0]->vtype) {
       case VT_INT:
-        eng->paramstack.push_back(new Var((double)args[0].get()->inum));
-        break;
+        return make_shared<Var>((double)args[0]->inum);
 
       case VT_DNUM:
-        eng->paramstack.push_back(new Var(args[0].get()->dnum));
-        break;
+        return make_shared<Var>(args[0]->dnum);
 
       case VT_STRING:
-        eng->paramstack.push_back(new Var(atof(args[0].get()->str.c_str())));
+        return make_shared<Var>(atof(args[0]->str.c_str()));
         break;
 
       default:
-        eng->paramstack.push_back(args[0].get()->clone());
+        return args[0]->clone();
       }
       break;
 
     case VT_STRING:
-      switch (args[0].get()->vtype) {
+      switch (args[0]->vtype) {
       case VT_INT:
-        eng->paramstack.push_back(new Var(to_string(args[0].get()->inum)));
-        break;
+        return make_shared<Var>(to_string(args[0]->inum));
 
       case VT_DNUM:
-        eng->paramstack.push_back(new Var(to_string(args[0].get()->dnum)));
-        break;
+        return make_shared<Var>(to_string(args[0]->dnum));
 
       case VT_STRING:
-        eng->paramstack.push_back(new Var(args[0].get()->str));
-        break;
+        return make_shared<Var>(args[0]->str);
 
       default:
-        eng->paramstack.push_back(args[0].get()->clone());
+        return args[0]->clone();
       }
       break;
 
     default:
-      eng->paramstack.push_back(args[0].get()->clone());
+      return args[0]->clone();
     }
   }
-  return eng->paramstack.back();
+  return make_shared<Var>();
 }
 
-void PackageMinosys::printfunc(const std::vector<Ptr<Var> > &args) {
+void PackageMinosys::printfunc(const std::vector<shared_ptr<Var> > &args) {
   int count = 0;
 
   for (auto p = args.begin(); p != args.end(); ++p) {
-    switch (p->get()->vtype) {
+    switch ((*p)->vtype) {
     case VT_INT:
-      printf("%d", p->get()->inum);
+      printf("%d", (*p)->inum);
       break;
 
     case VT_DNUM:
-      printf("%g", p->get()->dnum);
+      printf("%g", (*p)->dnum);
       break;
 
     case VT_STRING:
-      printf("%.*s", (int)p->get()->str.size(), p->get()->str.data());
+      printf("%.*s", (int)(*p)->str.size(), (*p)->str.data());
       break;
 
     case VT_INST:
       {
-        vector<Ptr<Var> > args;
-        Ptr<Var> r = this->start("toString", args);
-        if (!r.empty()) {
-          vector<Ptr<Var> > args;
-          args.push_back(r.get()->clone());
+        vector<shared_ptr<Var> > args;
+        shared_ptr<Var> r = this->start("toString", args);
+        if (r) {
+          vector<shared_ptr<Var> > args;
+          shared_ptr<Var> v(r->clone());
+          args.push_back(v);
           printfunc(args);
-          eng->paramstack.pop_back();
         }
       }
       break;
 
     case VT_ARRAY:
       printf("{");
-      for (auto pc = p->get()->arrayhash.begin(); pc != p->get()->arrayhash.end(); ++pc, ++count) {
+      for (auto pc = (*p)->arrayhash.begin(); pc != (*p)->arrayhash.end(); ++pc, ++count) {
         if (count) {
           printf(",");
         }
         string s = pc->first.toString();
         printf("%.*s: ", (int)s.size(), s.data());
-        vector<Ptr<Var> > args;
+        vector<shared_ptr<Var> > args;
         args.push_back(pc->second);
         printfunc(args);
       }
@@ -514,8 +487,8 @@ void PackageMinosys::printfunc(const std::vector<Ptr<Var> > &args) {
 
     case VT_FUNC:
       {
-        const string &pac = p->get()->func.get()->first;
-        const string &fname = p->get()->func.get()->second;
+        const string &pac = (*p)->func.first;
+        const string &fname = (*p)->func.second;
         if (pac.empty()) {
           printf("%.*s", (int)fname.size(), fname.data());
         } else {
@@ -526,10 +499,10 @@ void PackageMinosys::printfunc(const std::vector<Ptr<Var> > &args) {
 
     case VT_MEMBER:
       {
-        vector<Ptr<Var> > args;
-        args.push_back(p->get()->member.get()->first);
+        vector<shared_ptr<Var> > args;
+        args.push_back((*p)->member.first);
         printfunc(args);
-        string &mem = p->get()->member.get()->second;
+        string &mem = (*p)->member.second;
         printf(".%.*s", (int)mem.size(), mem.data());
       }
       break;
@@ -540,20 +513,20 @@ void PackageMinosys::printfunc(const std::vector<Ptr<Var> > &args) {
   }
 }
 
-void PackageMinosys::exitfunc(const std::vector<Ptr<Var> > &args) {
+void PackageMinosys::exitfunc(const std::vector<shared_ptr<Var> > &args) {
   int code = 0;
   if (!args.empty()) {
-    switch (args[0].get()->vtype) {
+    switch ((*args[0]).vtype) {
     case VT_INT:
-      code = args[0].get()->inum;
+      code = (*args[0]).inum;
       break;
 
     case VT_DNUM:
-      code = (int)args[0].get()->dnum;
+      code = (int)(*args[0]).dnum;
       break;
 
     case VT_STRING:
-      code = atoi(args[0].get()->str.c_str());
+      code = atoi((*args[0]).str.c_str());
       break;
     }
   }
@@ -564,18 +537,18 @@ PackageDlopen::~PackageDlopen() {
   dlclose(dlhandle);
 }
 
-Ptr<Var> PackageDlopen::start(const string &fname, vector<Ptr<Var> > &args) {
-  void *p = dlsym(dlhandle, "start");
+shared_ptr<Var> PackageDlopen::start(const string &fname, vector<shared_ptr<Var> > &args) {
+  void *p = dlsym(dlhandle, fname.c_str());
   if (p) {
     int (*pstart)(void *, void *, const char *, void *) =
       (int (*)(void *, void *, const char *, void *))p;
-    Ptr<Var> rval;
+    shared_ptr<Var> rval;
     int r = (*pstart)((void **)&rval, eng, fname.c_str(), &args);
     if (r == 0) {
       return rval;
     }
   }
-  return Ptr<Var>();
+  return make_shared<Var>();
 }
 
 Engine::~Engine() {
@@ -656,11 +629,11 @@ bool Engine::analyzePackage(const string &pacname, bool current) {
       ContentTop *top = new ContentTop();
       if (top->yylex(&lex)) {
         // minosys script として認識
-        PackageMinosys *pm = new PackageMinosys();
+        shared_ptr<PackageMinosys> pm(new PackageMinosys());
         pm->ptype = PackageBase::PT_MINOSYS;
         pm->top = top;
         pm->eng = this;
-        packages[pacname] = pm;
+        packages[pacname] = dynamic_pointer_cast<PackageBase>(pm);
         if (current) {
           packages[""] = packages[pacname];
         }
@@ -679,13 +652,13 @@ bool Engine::analyzePackage(const string &pacname, bool current) {
       void *st = dlsym(d, "start");
       if (st) {
         // binary package を発見
-        PackageDlopen *pd = new PackageDlopen();
+        shared_ptr<PackageDlopen> pd(new PackageDlopen());
         pd->ptype = PackageBase::PT_DLOPEN;
         pd->name = pacname;
         pd->path = pt;
         pd->dlhandle = d;
         pd->eng = this;
-        packages[pacname] = pd;
+        packages[pacname] = dynamic_pointer_cast<PackageBase>(pd);
         if (current) {
           packages[""] = packages[pacname];
         }
@@ -700,13 +673,13 @@ bool Engine::analyzePackage(const string &pacname, bool current) {
       if (top->yylex(&lexf)) {
         fclose(f);
         // minosys script を発見
-        PackageMinosys *pm = new PackageMinosys();
+        shared_ptr<PackageMinosys> pm(new PackageMinosys());
         pm->ptype = PackageBase::PT_MINOSYS;
         pm->name = pacname;
         pm->path = pt;
         pm->top = top;
         pm->eng = this;
-        packages[pacname] = pm;
+        packages[pacname] = dynamic_pointer_cast<PackageBase>(pm);
         if (current) {
           packages[""] = packages[pacname];
         }
@@ -721,34 +694,34 @@ bool Engine::analyzePackage(const string &pacname, bool current) {
   return false;
 }
 
-Ptr<Var> Engine::start(const string &pname, const string &fname, vector<Ptr<Var> > &args) {
+shared_ptr<Var> Engine::start(const string &pname, const string &fname, vector<shared_ptr<Var> > &args) {
   auto p = packages.find(pname);
   if (p != packages.end()) {
-    return p->second.getvalue().start(fname, args);
+    return p->second->start(fname, args);
   }
-  return Ptr<Var>();
+  return make_shared<Var>();
 }
 
-Var *Engine::searchVar(const string &vname) {
+shared_ptr<Var> Engine::searchVar(const string &vname) {
   // search block local
   for (int i = vars.size() - 1; i >= varmark.back(); --i) {
-    unordered_map<string, Ptr<Var> > &map = vars[i];
+    unordered_map<string, shared_ptr<Var> > &map = vars[i];
     auto p = map.find(vname);
     if (p != map.end()) {
-      return &p->second.getvalue();
+      return p->second;
     }
   }
 
   // search instance variable
   if (vars.size() - 1 >= varmark.back()) {
-    unordered_map<string, Ptr<Var> > &map = vars[varmark.back()];
+    unordered_map<string, shared_ptr<Var> > &map = vars[varmark.back()];
     auto p = map.find("this");
     if (p != map.end()) {
       // instance found
-      Instance *inst = &p->second.getvalue().inst.getvalue();
+      Instance *inst = p->second->inst.get();
       auto pi = inst->vars.find(vname);
       if (pi != inst->vars.end()) {
-        return &pi->second.getvalue();
+        return pi->second;
       }
     }
   }
@@ -756,9 +729,9 @@ Var *Engine::searchVar(const string &vname) {
   // search global variables
   auto pg = globalvars.find(vname);
   if (pg != globalvars.end()) {
-    return &pg->second.getvalue();
+    return pg->second;
   }
 
-  return NULL;
+  return make_shared<Var>();
 }
 
