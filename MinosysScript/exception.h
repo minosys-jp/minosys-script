@@ -25,6 +25,11 @@ class SyntaxException : public Exception {
   }
 };
 
+class RuntimeException : public Exception {
+ public:
+  RuntimeException(int e, std::string str) : Exception(e, str) {}
+};
+
 class ExitException : public Exception {
  public:
   int exitcode;
