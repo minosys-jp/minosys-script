@@ -3,6 +3,7 @@
 #include <unistd.h>
 #include <vector>
 #include <string>
+#include <memory>
 
 using namespace std;
 using namespace minosys;
@@ -38,9 +39,9 @@ int main(int argc, char **argv) {
     cout << "package:" << argv[0] << " not found" << endl;
     return 1;
   }
-  vector<Ptr<Var> > args;
-  Ptr<Var> r = eng.start(argv[0], "init", args);
-  if (!r.empty()) {
+  vector<shared_ptr<Var> > args;
+  shared_ptr<Var> r = eng.start(argv[0], "init", args);
+  if (r) {
     // paramstack の最後を pop する
     eng.paramstack.pop_back();
   }
