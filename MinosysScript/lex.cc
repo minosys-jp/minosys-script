@@ -252,7 +252,7 @@ LexBase::LexTag LexBase::analyze() {
 
     case 61: // 16進数
       if (isxdigit(c)) {
-        itoken *= 10;
+        itoken *= 16;
         itoken += (c >= 'a' && c <= 'f') ? (c - 'a' + 10) : (c >= 'A' && c <= 'F') ? (c - 'A' + 10) : (c - '0');
       } else {
         this->state = 0;
@@ -351,6 +351,10 @@ LexBase::LexTag LexBase::analyze() {
     case 76: // >
       if (c == '>') {
         this->state = 77;
+      } else if (c == '=') {
+        token = ">=";
+        this->state = 0;
+        return LT_OP;
       } else {
         token = ">";
         this->ungetc(c);
@@ -392,6 +396,10 @@ LexBase::LexTag LexBase::analyze() {
     case 100: // HTML
       if (c == '<') {
         this->state = 101;
+      } else if (c == '=') {
+        this->state = 0;
+        token = "<=";
+        return LT_OP;
       } else if (c == '!') {
         token.push_back('<');
         token.push_back('!');

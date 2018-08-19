@@ -188,10 +188,7 @@ PackageMinosys::~PackageMinosys() {
 
 shared_ptr<Var> PackageMinosys::start(const string &fname, vector<shared_ptr<Var> > &args) {
   auto p = top->funcs.find(fname);
- if (p != top->funcs.end()) {
-    Content *c = p->second;
-    unordered_map<string, shared_ptr<Var> > amap;
-
+ if (p == top->funcs.end()) {
     // ビルトイン関数
     if (fname == "type") {
       return typefunc(args);
@@ -199,10 +196,13 @@ shared_ptr<Var> PackageMinosys::start(const string &fname, vector<shared_ptr<Var
       return convertfunc(args);
     } else if (fname == "print") {
       printfunc(args);
-      return NULL;
+      return make_shared<Var>();
     } else if (fname == "exit") {
       exitfunc(args);
     }
+ } else {
+    Content *c = p->second;
+    unordered_map<string, shared_ptr<Var> > amap;
 
     for (int i = 0; i < args.size(); ++i) {
       amap[c->arg[i]] = args[i];
@@ -231,7 +231,7 @@ shared_ptr<Var> PackageMinosys::start(const string &fname, vector<shared_ptr<Var
     eng->callmark.pop_back();
     return rv;
   }
-  return make_shared<Var>();
+  throw RuntimeException(900, string("Unknown function/method:") + fname);
 }
 
 shared_ptr<Var> PackageMinosys::callfunc(const string &fname, Content *c) {
@@ -697,12 +697,20 @@ bool Engine::analyzePackage(const string &pacname, bool current) {
 shared_ptr<Var> Engine::start(const string &pname, const string &fname, vector<shared_ptr<Var> > &args) {
   auto p = packages.find(pname);
   if (p != packages.end()) {
-    return p->second->start(fname, args);
+    // カレントパッケージ名を設定する
+    string prevPackageName = this->currentPackageName;
+
+    // パッケージ関数呼び出し
+    shared_ptr<Var> r = p->second->start(fname, args);
+
+    // カレントパッケージ名を復帰する
+    this->currentPackageName = prevPackageName;
+    return r;
   }
   return make_shared<Var>();
 }
 
-shared_ptr<Var> Engine::searchVar(const string &vname) {
+shared_ptr<Var> &Engine::searchVar(const string &vname, bool bLHS) {
   // search block local
   for (int i = vars.size() - 1; i >= varmark.back(); --i) {
     unordered_map<string, shared_ptr<Var> > &map = vars[i];
@@ -732,6 +740,14 @@ shared_ptr<Var> Engine::searchVar(const string &vname) {
     return pg->second;
   }
 
-  return make_shared<Var>();
+  if (bLHS) {
+    // create a new local variable 
+    unordered_map<string, shared_ptr<Var> > &map = vars[varmark.back()];
+    map[vname] = make_shared<Var>();
+    return map[vname];
+  }
+
+  // 未定義の変数を使用した
+  throw RuntimeException(901, string("undefined variable:") + vname);
 }
 

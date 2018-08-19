@@ -124,6 +124,11 @@ class PackageMinosys : public PackageBase {
  private:
    std::shared_ptr<Var> eval_var(Content *c);
    std::shared_ptr<Var> eval_functag(Content *c);
+   std::shared_ptr<Var> eval_func(Content *c);
+   std::shared_ptr<Var> eval_op(Content *c);
+   std::shared_ptr<Var> eval_op_assign(Content *c);
+   std::shared_ptr<Var>& createVar(const std::string &vname, std::vector<Content *> &pc);
+   std::shared_ptr<Var>& createVarIndex(const VarKey &key, std::shared_ptr<Var> &v);
 
  public:
    ContentTop *top;
@@ -173,12 +178,13 @@ class Engine {
   std::vector<Content *> callstack;
   std::vector<int> callmark;
   std::vector<std::pair<std::string, std::string> > headers;
+  std::string currentPackageName;
   Engine(const std::vector<std::string> &searchPaths) : searchPaths(searchPaths), ar(NULL) {}
   ~Engine();
   bool analyzePackage(const std::string &pacname, bool current = false);
   void setArchive(const std::string &arname);
   std::shared_ptr<Var> start(const std::string &pname, const std::string &fname, std::vector<std::shared_ptr<Var> > &args);
-  std::shared_ptr<Var> searchVar(const std::string &vname);
+  std::shared_ptr<Var> &searchVar(const std::string &vname, bool bLHS = false);
 
  private:
    void analyzeArchive(FILE *f);
