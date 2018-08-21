@@ -95,7 +95,83 @@ shared_ptr<Var> PackageMinosys::eval_op(Content *c) {
   if (c->op == "=") {
     return eval_op_assign(c);
   }
+  if (c->op == "!") {
+    return eval_op_monoNot(c);
+  }
+  if (c->op == "~") {
+    return eval_op_negate(c);
+  }
+  if (c->op == "-") {
+    return eval_op_monoMinus(c);
+  }
+  if (c->op == "++x") {
+    return eval_op_preIncr(c);
+  }
+  if (c->op == "x++") {
+    return eval_op_postIncr(c);
+  }
+  if (c->op == "--x") {
+    return eval_op_preDecr(c);
+  }
+  if (c->op == "x--") {
+    return eval_op_postDecr(c);
+  }
+  if (c->op == "<") {
+    return eval_op_lt(c);
+  }
+  if (c->op == "<=") {
+    return eval_op_lteq(c);
+  }
+  if (c->op == ">") {
+    return eval_op_gt(c);
+  }
+  if (c->op == ">=") {
+    return eval_op_gteq(c);
+  }
+  if (c->op == "!=") {
+    return eval_op_neq(c);
+  }
+  if (c->op == "==") {
+    return eval_op_eq(c);
+  }
+  if (c->op == "+") {
+    return eval_op_plus(c);
+  }
   throw RuntimeException(1002, string("operator not defined:") + c->op);
+}
+
+// 単項 ! 演算子
+shared_ptr<Var> PackageMinosys::eval_op_monoNot(Content *c) {
+  shared_ptr<Var> v(evaluate(c->pc.at(0)));
+  shared_ptr<Var> r = make_shared<Var>((int)(v->isTrue() ? 0 : 1));
+  return r;
+}
+
+// 単項 ~ 演算子
+shared_ptr<Var> PackageMinosys::eval_op_negate(Content *c) {
+  shared_ptr<Var> v(evaluate(c->pc.at(0))->clone());
+  if (v->vtype == VT_INT) {
+    v->inum = ~v->inum;
+  }
+  return v;
+}
+
+// 単項 - 演算子
+shared_ptr<Var> PackageMinosys::eval_op_monoMinus(Content *c) {
+  // 値を評価する
+  shared_ptr<Var> v(evaluate(c->pc.at(0))->clone());
+
+  switch (v->vtype) {
+  case VT_INT:
+    v->inum = -v->inum;
+    break;
+
+  case VT_DNUM:
+    v->dnum = -v->dnum;
+    break;
+  }
+
+  return v;
 }
 
 // 配列を考慮して変数を作成する
@@ -166,5 +242,360 @@ shared_ptr<Var> PackageMinosys::eval_op_assign(Content *c) {
   // 右辺
   v = evaluate(c->pc.at(1));
   return v;
+}
+
+// 前置 +1 演算子の評価
+shared_ptr<Var> PackageMinosys::eval_op_preIncr(Content *c) {
+  // 変数を探す; なければ作成する
+  Content *lhs = c->pc.at(0);
+  shared_ptr<Var> &v = createVar(lhs->op, lhs->pc);
+
+  switch (v->vtype) {
+  case VT_NULL:
+    v->vtype = VT_INT;
+    v->inum = 1;
+    break;
+
+  case VT_INT:
+    v->inum++;
+    break;
+
+  case VT_DNUM:
+    v->dnum += 1;
+    break;
+  }
+
+  return v;
+}
+
+// 後置 +1 演算子の評価
+shared_ptr<Var> PackageMinosys::eval_op_postIncr(Content *c) {
+  // 変数を探す
+  Content *lhs = c->pc.at(0);
+  shared_ptr<Var> &v = createVar(lhs->op, lhs->pc);
+  shared_ptr<Var> vclone(v->clone());
+
+  if (vclone->vtype == VT_NULL) {
+    vclone->vtype = VT_INT;
+    vclone->inum = 0;
+  }
+
+  switch (v->vtype) {
+  case VT_NULL:
+    v->vtype = VT_INT;
+    v->inum = 1;
+    break;
+
+  case VT_INT:
+    v->inum++;
+    break;
+
+  case VT_DNUM:
+    v->dnum += 1;
+    break;
+  }
+
+  return vclone;
+}
+
+// 前置 -1 演算子の評価
+shared_ptr<Var> PackageMinosys::eval_op_preDecr(Content *c) {
+  // 変数を探す
+  Content *lhs = c->pc.at(0);
+  shared_ptr<Var> &v = createVar(lhs->op, lhs->pc);
+
+  switch (v->vtype) {
+  case VT_NULL:
+    v->vtype = VT_INT;
+    v->inum = -1;
+    break;
+
+  case VT_INT:
+    v->inum--;
+    break;
+
+  case VT_DNUM:
+    v->dnum -= 1;
+    break;
+  }
+
+  return v;
+}
+
+// 後置 -1 演算子の評価
+shared_ptr<Var> PackageMinosys::eval_op_postDecr(Content *c) {
+  // 変数を探す
+  Content *lhs = c->pc.at(0);
+  shared_ptr<Var> &v = createVar(lhs->op, lhs->pc);
+  shared_ptr<Var> vclone(v->clone());
+
+  switch (v->vtype) {
+  case VT_NULL:
+    v->vtype = VT_INT;
+    v->inum = -1;
+    break;
+
+  case VT_INT:
+    v->inum--;
+    break;
+
+  case VT_DNUM:
+    v->dnum -= 1;
+    break;
+  }
+
+  return vclone;
+}
+
+// 比較演算子: <
+shared_ptr<Var> PackageMinosys::eval_op_lt(Content *c) {
+  shared_ptr<Var> v1 = evaluate(c->pc.at(0));
+  shared_ptr<Var> v2 = evaluate(c->pc.at(1));
+
+  switch (v1->vtype) {
+  case VT_NULL:
+    switch (v2->vtype) {
+    case VT_INT:
+    case VT_DNUM:
+      return make_shared<Var>(1);
+
+    case VT_STRING:
+      return make_shared<Var>((int)(v2->str.empty() ? 0 : 1));
+    }
+    break;
+
+  case VT_INT:
+    switch (v2->vtype) {
+    case VT_INT:
+      return make_shared<Var>((int)(v1->inum < v2->inum ? 1 : 0));
+
+    case VT_DNUM:
+      return make_shared<Var>((int)(v1->inum < v2->dnum ? 1: 0));
+    }
+    break;
+
+  case VT_DNUM:
+    switch (v2->vtype) {
+    case VT_INT:
+      return make_shared<Var>((int)(v1->dnum < v2->inum ? 1 : 0));
+
+    case VT_DNUM:
+      return make_shared<Var>((int)(v1->dnum < v2->dnum ? 1: 0));
+    }
+    break;
+
+  case VT_STRING:
+    if (v2->vtype == VT_STRING) {
+      return make_shared<Var>((int)(v1->str < v2->str ? 1 : 0));
+    }
+  }
+
+  // 判定できない場合は[偽]を返す
+  return make_shared<Var>((int)0);
+}
+
+// 比較演算子: <=
+shared_ptr<Var> PackageMinosys::eval_op_lteq(Content *c) {
+  shared_ptr<Var> v1 = evaluate(c->pc.at(0));
+  shared_ptr<Var> v2 = evaluate(c->pc.at(1));
+
+  switch (v1->vtype) {
+  case VT_NULL:
+    switch (v2->vtype) {
+    case VT_NULL:
+    case VT_INT:
+    case VT_DNUM:
+    case VT_STRING:
+      return make_shared<Var>(1);
+    }
+    break;
+
+  case VT_INT:
+    switch (v2->vtype) {
+    case VT_INT:
+      return make_shared<Var>((int)(v1->inum <= v2->inum ? 1 : 0));
+
+    case VT_DNUM:
+      return make_shared<Var>((int)(v1->inum <= v2->dnum ? 1: 0));
+    }
+    break;
+
+  case VT_DNUM:
+    switch (v2->vtype) {
+    case VT_INT:
+      return make_shared<Var>((int)(v1->dnum <= v2->inum ? 1 : 0));
+
+    case VT_DNUM:
+      return make_shared<Var>((int)(v1->dnum <= v2->dnum ? 1: 0));
+    }
+    break;
+
+  case VT_STRING:
+    if (v2->vtype == VT_STRING) {
+      return make_shared<Var>((int)(v1->str <= v2->str ? 1 : 0));
+    }
+  }
+
+  // 判定できない場合は[偽]を返す
+  return make_shared<Var>((int)0);
+}
+
+// 比較演算子: >
+shared_ptr<Var> PackageMinosys::eval_op_gt(Content *c) {
+  shared_ptr<Var> v1 = evaluate(c->pc.at(0));
+  shared_ptr<Var> v2 = evaluate(c->pc.at(1));
+
+  switch (v2->vtype) {
+  case VT_NULL:
+    switch (v1->vtype) {
+    case VT_INT:
+    case VT_DNUM:
+      return make_shared<Var>(1);
+
+    case VT_STRING:
+      return make_shared<Var>((int)(v1->str.empty() ? 0 : 1));
+    }
+    break;
+
+  case VT_INT:
+    switch (v1->vtype) {
+    case VT_INT:
+      return make_shared<Var>((int)(v1->inum > v2->inum ? 1 : 0));
+
+    case VT_DNUM:
+      return make_shared<Var>((int)(v1->dnum > v2->inum ? 1: 0));
+    }
+    break;
+
+  case VT_DNUM:
+    switch (v1->vtype) {
+    case VT_INT:
+      return make_shared<Var>((int)(v1->inum > v2->dnum ? 1 : 0));
+
+    case VT_DNUM:
+      return make_shared<Var>((int)(v1->dnum > v2->dnum ? 1: 0));
+    }
+    break;
+
+  case VT_STRING:
+    if (v2->vtype == VT_STRING) {
+      return make_shared<Var>((int)(v1->str > v2->str ? 1 : 0));
+    }
+  }
+
+  // 判定できない場合は[偽]を返す
+  return make_shared<Var>((int)0);
+}
+
+// 比較演算子: >=
+shared_ptr<Var> PackageMinosys::eval_op_gteq(Content *c) {
+  shared_ptr<Var> v1 = evaluate(c->pc.at(0));
+  shared_ptr<Var> v2 = evaluate(c->pc.at(1));
+
+  switch (v2->vtype) {
+  case VT_NULL:
+    switch (v1->vtype) {
+    case VT_NULL:
+    case VT_INT:
+    case VT_DNUM:
+    case VT_STRING:
+      return make_shared<Var>(1);
+    }
+    break;
+
+  case VT_INT:
+    switch (v1->vtype) {
+    case VT_INT:
+      return make_shared<Var>((int)(v1->inum >= v2->inum ? 1 : 0));
+
+    case VT_DNUM:
+      return make_shared<Var>((int)(v1->dnum >= v2->inum ? 1: 0));
+    }
+    break;
+
+  case VT_DNUM:
+    switch (v1->vtype) {
+    case VT_INT:
+      return make_shared<Var>((int)(v1->inum >= v2->dnum ? 1 : 0));
+
+    case VT_DNUM:
+      return make_shared<Var>((int)(v1->dnum >= v2->dnum ? 1: 0));
+    }
+    break;
+
+  case VT_STRING:
+    if (v2->vtype == VT_STRING) {
+      return make_shared<Var>((int)(v1->str >= v2->str ? 1 : 0));
+    }
+  }
+
+  // 判定できない場合は[偽]を返す
+  return make_shared<Var>((int)0);
+}
+
+// 比較演算子: !=
+shared_ptr<Var> PackageMinosys::eval_op_neq(Content *c) {
+  shared_ptr<Var> v1 = evaluate(c->pc.at(0));
+  shared_ptr<Var> v2 = evaluate(c->pc.at(1));
+
+  return make_shared<Var> ((int)(*v1 == *v2 ? 0 : 1));
+}
+
+// 比較演算子: ==
+shared_ptr<Var> PackageMinosys::eval_op_eq(Content *c) {
+  shared_ptr<Var> v1 = evaluate(c->pc.at(0));
+  shared_ptr<Var> v2 = evaluate(c->pc.at(1));
+
+  return make_shared<Var> ((int)(*v1 == *v2 ? 1 : 0));
+}
+
+// 二項演算子: +
+shared_ptr<Var> PackageMinosys::eval_op_plus(Content *c) {
+  shared_ptr<Var> v1 = evaluate(c->pc.at(0));
+  shared_ptr<Var> v2 = evaluate(c->pc.at(1));
+
+  switch(v1->vtype) {
+  case VT_INT:
+    switch (v2->vtype) {
+    case VT_INT:
+      return make_shared<Var>(v1->inum + v2->inum);
+
+    case VT_DNUM:
+      return make_shared<Var>(v1->inum + v2->dnum);
+
+    case VT_STRING:
+      return make_shared<Var>(to_string(v1->inum) + v2->str);
+    }
+    break;
+
+  case VT_DNUM:
+    switch (v2->vtype) {
+    case VT_INT:
+      return make_shared<Var>(v1->dnum + v2->inum);
+
+    case VT_DNUM:
+      return make_shared<Var>(v1->dnum + v2->dnum);
+
+    case VT_STRING:
+      return make_shared<Var>(to_string(v1->dnum) + v2->str);
+    }
+    break;
+
+  case VT_STRING:
+    switch (v2->vtype) {
+    case VT_INT:
+      return make_shared<Var>(v1->str + to_string(v2->inum));
+
+    case VT_DNUM:
+      return make_shared<Var>(v1->str + to_string(v2->dnum));
+
+    case VT_STRING:
+      return make_shared<Var>(v1->str + v2->str);
+    }
+    break;
+  }
+
+  // 無効な演算
+  return make_shared<Var>();
 }
 
