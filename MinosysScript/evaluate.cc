@@ -738,6 +738,120 @@ shared_ptr<Var> PackageMinosys::eval_op_assignxor(Content *c) {
   return v1;
 }
 
+// 代入演算子: <<=
+shared_ptr<Var> PackageMinosys::eval_op_assignlsh(Content *c) {
+  // 左辺
+  Content *lhs = c->pc.at(0);
+
+  // 変数を探す; なければ作成する
+  shared_ptr<Var> &v1 = createVar(lhs->op, lhs->pc);
+
+  // TODO: メンバー変数の検索
+
+  // 右辺
+  shared_ptr<Var> v2 = evaluate(c->pc.at(1));
+
+  switch (v1->vtype) {
+  case VT_INT:
+    switch (v2->vtype) {
+    case VT_INT:
+      v1->inum <<= v2->inum;
+      return v1;
+
+    case VT_DNUM:
+      v1->inum <<= (int)v2->dnum;
+      return v1;
+    }
+    break;
+
+  case VT_DNUM:
+    switch (v2->vtype) {
+    case VT_INT:
+      v1->vtype = VT_INT;
+      v1->inum = (int)v1->dnum << v2->inum;
+      return v1;
+
+    case VT_DNUM:
+      v1->vtype = VT_INT;
+      v1->inum = (int)v1->dnum << (int)v2->dnum;
+      return v1;
+    }
+    break;
+
+  case VT_STRING:
+    switch (v2->vtype) {
+    case VT_INT:
+      v1->str += createMulString(v2->inum, " ");
+      return v1;
+
+    case VT_DNUM:
+      v1->str += createMulString((int)v2->dnum, " ");
+      return v1;
+    }
+    break;
+  }
+
+  // 評価できない場合は左辺の値を返す
+  return v1;
+}
+
+// 代入演算子: >>=
+shared_ptr<Var> PackageMinosys::eval_op_assignrsh(Content *c) {
+  // 左辺
+  Content *lhs = c->pc.at(0);
+
+  // 変数を探す; なければ作成する
+  shared_ptr<Var> &v1 = createVar(lhs->op, lhs->pc);
+
+  // TODO: メンバー変数の検索
+
+  // 右辺
+  shared_ptr<Var> v2 = evaluate(c->pc.at(1));
+
+  switch (v1->vtype) {
+  case VT_INT:
+    switch (v2->vtype) {
+    case VT_INT:
+      v1->inum >>= v2->inum;
+      return v1;
+
+    case VT_DNUM:
+      v1->inum >>= (int)v2->dnum;
+      return v1;
+    }
+    break;
+
+  case VT_DNUM:
+    switch (v2->vtype) {
+    case VT_INT:
+      v1->vtype = VT_INT;
+      v1->inum = (int)v1->dnum >> v2->inum;
+      return v1;
+
+    case VT_DNUM:
+      v1->vtype = VT_INT;
+      v1->inum = (int)v1->dnum >> (int)v2->dnum;
+      return v1;
+    }
+    break;
+
+  case VT_STRING:
+    switch (v2->vtype) {
+    case VT_INT:
+      v1->str = createMulString(v2->inum, " ") + v1->str;
+      return v1;
+
+    case VT_DNUM:
+      v1->str = createMulString((int)v2->dnum, " ") + v1->str;
+      return v1;
+    }
+    break;
+  }
+
+  // 評価できない場合は左辺の値を返す
+  return v1;
+}
+
 // 前置 +1 演算子の評価
 shared_ptr<Var> PackageMinosys::eval_op_preIncr(Content *c) {
   // 変数を探す; なければ作成する
@@ -1345,6 +1459,88 @@ shared_ptr<Var> PackageMinosys::eval_op_logor(Content *c) {
   }
   shared_ptr<Var> v2 = evaluate(c->pc.at(1));
   return make_shared<Var>(v2->isTrue() ? 1 : (int)0);
+}
+
+// 二項演算子: <<
+shared_ptr<Var> PackageMinosys::eval_op_lsh(Content *c) {
+  shared_ptr<Var> v1 = evaluate(c->pc.at(0));
+  shared_ptr<Var> v2 = evaluate(c->pc.at(1));
+
+  switch (v1->vtype) {
+  case VT_INT:
+    switch (v2->vtype) {
+    case VT_INT:
+      return make_shared<Var>(v1->inum << v2->inum);
+
+    case VT_DNUM:
+      return make_shared<Var>(v1->inum << (int)v2->inum);
+    }
+    break;
+
+  case VT_DNUM:
+    switch (v2->vtype) {
+    case VT_INT:
+      return make_shared<Var>((int)v1->dnum << v2->inum);
+
+    case VT_DNUM:
+      return make_shared<Var>((int)v1->dnum << (int)v2->dnum);
+    }
+    break;
+
+  case VT_STRING:
+    switch (v2->vtype) {
+    case VT_INT:
+      return make_shared<Var>(v1->str + createMulString(v2->inum, " "));
+
+    case VT_DNUM:
+      return make_shared<Var>(v1->str + createMulString((int)v2->dnum, " "));
+    }
+    break;
+  }
+
+  // 無効な演算の場合は NULL を返す
+  return make_shared<Var>();
+}
+
+// 二項演算子: >>
+shared_ptr<Var> PackageMinosys::eval_op_rsh(Content *c) {
+  shared_ptr<Var> v1 = evaluate(c->pc.at(0));
+  shared_ptr<Var> v2 = evaluate(c->pc.at(1));
+
+  switch (v1->vtype) {
+  case VT_INT:
+    switch (v2->vtype) {
+    case VT_INT:
+      return make_shared<Var>(v1->inum >> v2->inum);
+
+    case VT_DNUM:
+      return make_shared<Var>(v1->inum >> (int)v2->dnum);
+    }
+    break;
+
+  case VT_DNUM:
+    switch (v2->vtype) {
+    case VT_INT:
+      return make_shared<Var>((int)v1->dnum >> v2->inum);
+
+    case VT_DNUM:
+      return make_shared<Var>((int)v1->dnum >> (int)v2->dnum);
+    }
+    break;
+
+  case VT_STRING:
+    switch (v2->vtype) {
+    case VT_INT:
+      return make_shared<Var>(createMulString(v2->inum, " ") + v1->str);
+
+    case VT_DNUM:
+      return make_shared<Var>(createMulString((int)v2->dnum, " ") + v1->str);
+    }
+    break;
+  }
+
+  // 無効な演算の場合は NULL を返す
+  return make_shared<Var>();
 }
 
 // 文字列 s を count 回繰り返した文字列を返す
