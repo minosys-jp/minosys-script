@@ -137,6 +137,9 @@ shared_ptr<Var> PackageMinosys::eval_op(Content *c) {
   if (c->op == "+") {
     return eval_op_plus(c);
   }
+  if (c->op == "*") {
+    return eval_op_multiply(c);
+  }
   throw RuntimeException(1002, string("operator not defined:") + c->op);
 }
 
@@ -597,5 +600,61 @@ shared_ptr<Var> PackageMinosys::eval_op_plus(Content *c) {
 
   // 無効な演算
   return make_shared<Var>();
+}
+
+// 二項演算子: *
+shared_ptr<Var> PackageMinosys::eval_op_multiply(Content *c) {
+  shared_ptr<Var> v1 = evaluate(c->pc.at(0));
+  shared_ptr<Var> v2 = evaluate(c->pc.at(1));
+
+  switch (v1->vtype) {
+  case VT_INT:
+    switch (v2->vtype) {
+    case VT_INT:
+      return make_shared<Var>(v1->inum * v2->inum);
+
+    case VT_DNUM:
+      return make_shared<Var>(v1->inum * v2->dnum);
+
+    case VT_STRING:
+      return createMulString(v1->inum, v2->str);
+    }
+    break;
+
+  case VT_DNUM:
+    switch (v2->vtype) {
+    case VT_INT:
+      return make_shared<Var>(v1->dnum * v2->inum);
+
+    case VT_DNUM:
+      return make_shared<Var>(v1->dnum * v2->dnum);
+
+    case VT_STRING:
+      return createMulString((int)v1->dnum, v2->str);
+    }
+    break;
+
+  case VT_STRING:
+    switch (v2->vtype) {
+    case VT_INT:
+      return createMulString(v2->inum, v1->str);
+
+    case VT_DNUM:
+      return createMulString((int)v2->dnum, v1->str);
+    }
+    break;
+  }
+
+  // 無効な演算
+  return make_shared<Var>();
+}
+
+// 文字列 s を count 回繰り返した文字列を返す
+shared_ptr<Var> PackageMinosys::createMulString(int count, const string &s) {
+  string sr;
+  for (int i = 0; i < count; i++) {
+    sr += s;
+  }
+  return make_shared<Var>(sr);
 }
 

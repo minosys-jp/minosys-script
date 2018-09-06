@@ -93,6 +93,7 @@ struct Var {
   Var(const Var &v);
   ~Var();
   Var &operator = (const Var &v);
+  bool operator == (const Var &v) const;
   std::shared_ptr<Var> clone();
   bool isTrue() const;
 };
@@ -125,10 +126,26 @@ class PackageMinosys : public PackageBase {
    std::shared_ptr<Var> eval_var(Content *c);
    std::shared_ptr<Var> eval_functag(Content *c);
    std::shared_ptr<Var> eval_func(Content *c);
+   std::shared_ptr<Var> eval_op_monoNot(Content *c);
+   std::shared_ptr<Var> eval_op_negate(Content *c);
+   std::shared_ptr<Var> eval_op_monoMinus(Content *c);
    std::shared_ptr<Var> eval_op(Content *c);
    std::shared_ptr<Var> eval_op_assign(Content *c);
+   std::shared_ptr<Var> eval_op_preIncr(Content *c);
+   std::shared_ptr<Var> eval_op_postIncr(Content *c);
+   std::shared_ptr<Var> eval_op_preDecr(Content *c);
+   std::shared_ptr<Var> eval_op_postDecr(Content *c);
+   std::shared_ptr<Var> eval_op_lt(Content *c);
+   std::shared_ptr<Var> eval_op_lteq(Content *c);
+   std::shared_ptr<Var> eval_op_gt(Content *c);
+   std::shared_ptr<Var> eval_op_gteq(Content *c);
+   std::shared_ptr<Var> eval_op_neq(Content *c);
+   std::shared_ptr<Var> eval_op_eq(Content *c);
+   std::shared_ptr<Var> eval_op_plus(Content *c);
+   std::shared_ptr<Var> eval_op_multiply(Content *c);
    std::shared_ptr<Var>& createVar(const std::string &vname, std::vector<Content *> &pc);
    std::shared_ptr<Var>& createVarIndex(const VarKey &key, std::shared_ptr<Var> &v);
+   std::shared_ptr<Var> createMulString(int count, const std::string &s);
 
  public:
    ContentTop *top;

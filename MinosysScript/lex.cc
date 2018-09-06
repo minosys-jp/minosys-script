@@ -92,6 +92,8 @@ LexBase::LexTag LexBase::analyze() {
             this->state = 78;
           } else if (c == '!') {
             this->state = 79;
+          } else if (c == '%') {
+            this->state = 80;
           } else {
             if (c == '(') {
               ++rp;
@@ -109,7 +111,7 @@ LexBase::LexTag LexBase::analyze() {
 
     case 1:
       if (c == '=') {
-        token = "<=";
+        token = "/=";
         this->state = 0;
         return LT_OP;
       } else if (c == '/') {
@@ -120,6 +122,9 @@ LexBase::LexTag LexBase::analyze() {
         this->state = 12;
       } else {
         this->ungetc(c);
+        token = "/";
+        this->state = 0;
+        return LT_OP;
       }
       break;
 
@@ -388,6 +393,16 @@ LexBase::LexTag LexBase::analyze() {
         token = "!=";
       } else {
         token = "!";
+        this->ungetc(c);
+      }
+      state = 0;
+      return LT_OP;
+
+    case 80: / '%'
+      if (c == '=') {
+        token = "%=";
+      } else {
+        token = "%";
         this->ungetc(c);
       }
       state = 0;
