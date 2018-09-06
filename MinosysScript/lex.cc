@@ -398,7 +398,7 @@ LexBase::LexTag LexBase::analyze() {
       state = 0;
       return LT_OP;
 
-    case 80: / '%'
+    case 80: // '%'
       if (c == '=') {
         token = "%=";
       } else {

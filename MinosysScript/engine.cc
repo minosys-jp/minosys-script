@@ -179,6 +179,71 @@ bool Var::isTrue() const {
   }
 }
 
+bool Var::operator == (const Var &v) const {
+  switch (this->vtype) {
+  case VT_NULL:
+    return v.vtype == VT_NULL;
+
+  case VT_INT:
+    switch (v.vtype) {
+    case VT_INT:
+      return this->inum == v.inum;
+
+    case VT_DNUM:
+      return this->inum == v.dnum;
+    }
+    break;
+
+  case VT_DNUM:
+    switch (v.vtype) {
+    case VT_INT:
+      return this->dnum == v.inum;
+
+    case VT_DNUM:
+      return this->dnum == v.dnum;
+    }
+    break;
+
+  case VT_STRING:
+    if (v.vtype == VT_STRING) {
+      return this->str == v.str;
+    }
+    break;
+
+  case VT_INST:
+    if (v.vtype == VT_INST) {
+      return this->inst == v.inst;
+    }
+    break;
+
+  case VT_POINTER:
+    if (v.vtype == VT_POINTER) {
+      return this->pointer == v.pointer;
+    }
+    break;
+
+  case VT_ARRAY:
+    if (v.vtype == VT_ARRAY) {
+      return this->arrayhash == v.arrayhash;
+    }
+    break;
+
+  case VT_FUNC:
+    if (v.vtype == VT_FUNC) {
+      return this->func == v.func;
+    }
+    break;
+
+  case VT_MEMBER:
+    if (v.vtype == VT_MEMBER) {
+      return this->member == v.member;
+    }
+    break;
+  }
+
+  return false;
+}
+
 Var::~Var() {
 }
 
@@ -204,6 +269,10 @@ shared_ptr<Var> PackageMinosys::start(const string &fname, vector<shared_ptr<Var
     Content *c = p->second;
     unordered_map<string, shared_ptr<Var> > amap;
 
+    if (c->arg.size() != args.size()) {
+      throw RuntimeException(903, string("Arg size not matched:") + fname);
+    }
+
     for (int i = 0; i < args.size(); ++i) {
       amap[c->arg[i]] = args[i];
     }
@@ -211,7 +280,7 @@ shared_ptr<Var> PackageMinosys::start(const string &fname, vector<shared_ptr<Var
     eng->topmark.push_back(eng->paramstack.size());
     eng->callmark.push_back(eng->callstack.size());
     eng->vars.push_back(amap);
-    shared_ptr<Var> rv = callfunc(fname, c);
+    shared_ptr<Var> rv = callfunc(fname, c->pc.at(0));
     if (eng->topmark.back() > eng->paramstack.size()) {
       eng->paramstack.erase(
         eng->paramstack.begin() + eng->topmark.back(),

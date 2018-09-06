@@ -126,11 +126,21 @@ class PackageMinosys : public PackageBase {
    std::shared_ptr<Var> eval_var(Content *c);
    std::shared_ptr<Var> eval_functag(Content *c);
    std::shared_ptr<Var> eval_func(Content *c);
+   std::shared_ptr<Var> eval_op(Content *c);
+
+   std::shared_ptr<Var> eval_op_3term(Content *c);
    std::shared_ptr<Var> eval_op_monoNot(Content *c);
    std::shared_ptr<Var> eval_op_negate(Content *c);
    std::shared_ptr<Var> eval_op_monoMinus(Content *c);
-   std::shared_ptr<Var> eval_op(Content *c);
    std::shared_ptr<Var> eval_op_assign(Content *c);
+   std::shared_ptr<Var> eval_op_assignplus(Content *c);
+   std::shared_ptr<Var> eval_op_assignminus(Content *c);
+   std::shared_ptr<Var> eval_op_assignmultiply(Content *c);
+   std::shared_ptr<Var> eval_op_assigndiv(Content *c);
+   std::shared_ptr<Var> eval_op_assignmod(Content *c);
+   std::shared_ptr<Var> eval_op_assignand(Content *c);
+   std::shared_ptr<Var> eval_op_assignor(Content *c);
+   std::shared_ptr<Var> eval_op_assignxor(Content *c);
    std::shared_ptr<Var> eval_op_preIncr(Content *c);
    std::shared_ptr<Var> eval_op_postIncr(Content *c);
    std::shared_ptr<Var> eval_op_preDecr(Content *c);
@@ -142,10 +152,20 @@ class PackageMinosys : public PackageBase {
    std::shared_ptr<Var> eval_op_neq(Content *c);
    std::shared_ptr<Var> eval_op_eq(Content *c);
    std::shared_ptr<Var> eval_op_plus(Content *c);
+   std::shared_ptr<Var> eval_op_minus(Content *c);
    std::shared_ptr<Var> eval_op_multiply(Content *c);
+   std::shared_ptr<Var> eval_op_div(Content *c);
+   std::shared_ptr<Var> eval_op_mod(Content *c);
+   std::shared_ptr<Var> eval_op_logand(Content *c);
+   std::shared_ptr<Var> eval_op_logor(Content *c);
+   std::shared_ptr<Var> eval_op_and(Content *c);
+   std::shared_ptr<Var> eval_op_or(Content *c);
+   std::shared_ptr<Var> eval_op_xor(Content *c);
+
+
    std::shared_ptr<Var>& createVar(const std::string &vname, std::vector<Content *> &pc);
    std::shared_ptr<Var>& createVarIndex(const VarKey &key, std::shared_ptr<Var> &v);
-   std::shared_ptr<Var> createMulString(int count, const std::string &s);
+   std::string createMulString(int count, const std::string &s);
 
  public:
    ContentTop *top;

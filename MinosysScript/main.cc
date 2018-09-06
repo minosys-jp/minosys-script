@@ -40,20 +40,24 @@ int main(int argc, char **argv) {
     return 1;
   }
   vector<shared_ptr<Var> > args;
-  shared_ptr<Var> r = eng.start(argv[0], "init", args);
-  cout << "return type: " << r->vtype << endl;
-  switch (r->vtype) {
-  case VT_INT:
-    cout << "return value:" << r->inum << endl;
-    break;
+  try {
+    shared_ptr<Var> r = eng.start(argv[0], "init", args);
+    cout << "return type: " << r->vtype << endl;
+    switch (r->vtype) {
+    case VT_INT:
+      cout << "return value:" << r->inum << endl;
+      break;
 
-  case VT_DNUM:
-    cout << "return value:" << r->dnum << endl;
-    break;
+    case VT_DNUM:
+      cout << "return value:" << r->dnum << endl;
+      break;
 
-  case VT_STRING:
-    cout << "return value:" << r->str << endl;
-    break;
+    case VT_STRING:
+      cout << "return value:" << r->str << endl;
+      break;
+    }
+  } catch (const RuntimeException &e) {
+    cout << "RuntimeException: number=" << e.e << ", message=" << e.er << endl;
   }
   return 0;
 }

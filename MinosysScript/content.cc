@@ -1,5 +1,6 @@
 #include "content.h"
 #include <algorithm>
+#include <iostream>
 
 using namespace std;
 using namespace minosys;
@@ -220,7 +221,7 @@ Content *ContentTop::yylex_sentence(const string &label, LexBase *lex) {
       yylex_arg(t, lex);
       Content *def = yylex_block(lex);
       t->pc.push_back(def);
-      this->funcs[this->parseFunc] = def;
+      this->funcs[this->parseFunc] = t;
       this->parseFunc = "";
     }
   } else if (token.tag == LexBase::LT_FOR) {
@@ -484,7 +485,7 @@ Content *ContentTop::yylex_evalbody(LexBase *lex) {
   if (token.tag == LexBase::LT_OP && token.token == "+") {
     t = yylex_rhs(lex);
   } else if (token.tag == LexBase::LT_OP && token.token == "-") {
-    t = new Content(LexBase::LT_OP, "-");
+    t = new Content(LexBase::LT_OP, "-m");
     t->pc.push_back(yylex_rhs(lex));
   } else if (token.tag == LexBase::LT_OP && token.token == "++") {
     t = new Content(LexBase::LT_OP, "++x");
@@ -512,7 +513,7 @@ Content *ContentTop::yylex_evalbody(LexBase *lex) {
         t->pc.push_back(lhs);
       } else if (token.token == "=" || token.token == "+="
         || token.token == "-=" || token.token == "*="
-        || token.token == "-=" || token.token == "&="
+        || token.token == "/=" || token.token == "%=" || token.token == "&="
         || token.token == "|=" || token.token == "^="
         || token.token == "<<=" || token.token == ">>=") {
         // 代入演算子
