@@ -579,7 +579,7 @@ Content *ContentTop::yylex_lhs(LexBase *lex) {
 
 Content *ContentTop::yylex_rhs(LexBase *lex) {
   ContentToken token;
-  Content *c1 = yylex_comp(lex);
+  Content *c1 = yylex_shift(lex);
 
   if (getContentToken(token, lex) < 0) return c1;
   if (token.tag == LexBase::LT_OP) {
@@ -604,6 +604,26 @@ Content *ContentTop::yylex_rhs(LexBase *lex) {
 Content *ContentTop::yylex_rhs2(Content *c, LexBase *lex) {
   this->savedLHS = c;
   return yylex_rhs(lex);
+}
+
+Content *ContentTop::yylex_shift(LexBase *lex) {
+  ContentToken token;
+  Content *c1 = yylex_comp(lex);
+
+  if (getContentToken(token, lex) < 0) return c1;
+  if (token.tag == LexBase::LT_OP) {
+    if (token.token == "<<" || token.token == ">>") {
+      Content *c2 = yylex_eval(lex);
+      if (c2) {
+        Content *t = new Content(LexBase::LT_OP, token.token);
+        t->pc.push_back(c1);
+        t->pc.push_back(c2);
+        return t;
+      }
+    }
+  }
+  listContent.push_back(token);
+  return c1;
 }
 
 Content *ContentTop::yylex_comp(LexBase *lex) {

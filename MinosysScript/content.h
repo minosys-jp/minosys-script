@@ -123,6 +123,7 @@ class ContentTop {
   Content *yylex_rhs(LexBase *lex);
   Content *yylex_rhs2(Content *c, LexBase *lex);
   Content *yylex_comp(LexBase *lex);
+  Content *yylex_shift(LexBase *lex);
   Content *yylex_arith(LexBase *lex);
   Content *yylex_term(LexBase *lex);
   Content *yylex_mono(LexBase *lex);

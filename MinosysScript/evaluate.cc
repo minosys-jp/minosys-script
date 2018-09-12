@@ -122,6 +122,12 @@ shared_ptr<Var> PackageMinosys::eval_op(Content *c) {
   if (c->op == "^=") {
     return eval_op_assignxor(c);
   }
+  if (c->op == "<<=") {
+    return eval_op_assignlsh(c);
+  }
+  if (c->op == ">>=") {
+    return eval_op_assignrsh(c);
+  }
   if (c->op == "!") {
     return eval_op_monoNot(c);
   }
@@ -190,6 +196,12 @@ shared_ptr<Var> PackageMinosys::eval_op(Content *c) {
   }
   if (c->op == "||") {
     return eval_op_logor(c);
+  }
+  if (c->op == "<<") {
+    return eval_op_lsh(c);
+  }
+  if (c->op == ">>") {
+    return eval_op_rsh(c);
   }
   throw RuntimeException(1002, string("operator not defined:") + c->op);
 }
