@@ -169,7 +169,8 @@ class PackageMinosys : public PackageBase {
    OP(rsh);
 
    std::shared_ptr<Var>& createVar(const std::string &vname, std::vector<Content *> &pc);
-   std::shared_ptr<Var>& createVarIndex(const VarKey &key, std::shared_ptr<Var> &v);
+   std::shared_ptr<Var>* createVarIndex(const VarKey &key, std::shared_ptr<Var> *pv);
+   std::shared_ptr<Var>& searchVarIndex(const VarKey &key, std::shared_ptr<Var> &v);
    std::string createMulString(int count, const std::string &s);
 
  public:
