@@ -247,29 +247,89 @@ bool Var::operator == (const Var &v) const {
 Var::~Var() {
 }
 
+
+#define OPMAP(cc,name) opmap[cc] = [](PackageMinosys *p, Content *c){ return p->eval_op_##name(c); }
+#define BUILTINMAP(map,cc,name) map[cc] = [](PackageMinosys *p, const vector<shared_ptr<Var> > &args) { return p->func##name (args); }
+#undef BUILTIN
+#define BUILTIN(name) shared_ptr<Var> PackageMinosys::func##name (const vector<shared_ptr<Var> > &args)
+
+PackageMinosys::PackageMinosys() {
+  OPMAP(".", dot);
+  OPMAP("?", 3term);
+  OPMAP("=", assign);
+  OPMAP("+=", assignplus);
+  OPMAP("*=", assignmultiply);
+  OPMAP("-=", assignminus);
+  OPMAP("/=", assigndiv);
+  OPMAP("%=", assignmod);
+  OPMAP("&=", assignand);
+  OPMAP("|=", assignor);
+  OPMAP("^=", assignxor);
+  OPMAP("!", monoNot);
+  OPMAP("~", negate);
+  OPMAP("-m", monoMinus);
+  OPMAP("++x", preIncr);
+  OPMAP("x++", postIncr);
+  OPMAP("--x", preDecr);
+  OPMAP("x--", postDecr);
+  OPMAP("<", lt);
+  OPMAP("<=", lteq);
+  OPMAP(">", gt);
+  OPMAP(">=", gteq);
+  OPMAP("!=", neq);
+  OPMAP("==", eq);
+  OPMAP("+", plus);
+  OPMAP("-", minus);
+  OPMAP("*", multiply);
+  OPMAP("/", div);
+  OPMAP("%", mod);
+  OPMAP("&", and);
+  OPMAP("|", or);
+  OPMAP("^", xor);
+  OPMAP("&&", logand);
+  OPMAP("||", logor);
+  OPMAP("[", leftarray);
+
+  BUILTINMAP(builtinmap, "type", type);
+  BUILTINMAP(builtinmap, "convert", convert);
+  BUILTINMAP(builtinmap, "print", print);
+  BUILTINMAP(builtinmap, "exit", exit);
+
+  BUILTINMAP(stringmap, "at", at);
+  BUILTINMAP(stringmap, "empty", empty);
+  BUILTINMAP(stringmap, "length", length);
+  BUILTINMAP(stringmap, "index", index);
+  BUILTINMAP(stringmap, "rindex", rindex);
+  BUILTINMAP(stringmap, "substr", substr);
+}
+
 PackageMinosys::~PackageMinosys() {
   delete top;
 }
 
+// パッケージ関数呼び出し
 shared_ptr<Var> PackageMinosys::start(const string &fname, vector<shared_ptr<Var> > &args) {
   auto p = top->funcs.find(fname);
  if (p == top->funcs.end()) {
     // ビルトイン関数
-    if (fname == "type") {
-      return typefunc(args);
-    } else if (fname == "convert") {
-      return convertfunc(args);
-    } else if (fname == "print") {
-      printfunc(args);
-      return make_shared<Var>();
-    } else if (fname == "exit") {
-      exitfunc(args);
+    auto pb = builtinmap.find(fname);
+    if (pb != builtinmap.end()) {
+      return (pb->second)(this, args);
+    }
+    // string 固有関数
+    if (!args.empty() || args.at(0)->vtype == VT_STRING) {
+      auto ps = stringmap.find(fname);
+      if (ps != stringmap.end()) {
+        return (ps->second)(this, args);
+      }
     }
  } else {
     Content *c = p->second;
     unordered_map<string, shared_ptr<Var> > amap;
 
+    // TODO: 仮引数に過不足がある場合はデフォルト推定する
     if (c->arg.size() != args.size()) {
+cout << "c->arg:" << c->arg.size() << ", args:" << args.size() << endl;
       throw RuntimeException(903, string("Arg size not matched:") + fname);
     }
 
@@ -303,6 +363,7 @@ shared_ptr<Var> PackageMinosys::start(const string &fname, vector<shared_ptr<Var
   throw RuntimeException(900, string("Unknown function/method:") + fname);
 }
 
+// 関数呼び出し
 shared_ptr<Var> PackageMinosys::callfunc(const string &fname, Content *c) {
   while (c) {
     bool redo = false;
@@ -439,7 +500,8 @@ shared_ptr<Var> PackageMinosys::callfunc(const string &fname, Content *c) {
   return make_shared<Var>();
 }
 
-shared_ptr<Var> PackageMinosys::typefunc(const std::vector<shared_ptr<Var> > &args) {
+// 変数型を返す
+BUILTIN(type) {
   int vtype = -1;
   if (!args.empty()) {
     vtype = (int)args[0]->vtype;
@@ -447,7 +509,8 @@ shared_ptr<Var> PackageMinosys::typefunc(const std::vector<shared_ptr<Var> > &ar
   return make_shared<Var>(vtype);
 }
 
-shared_ptr<Var> PackageMinosys::convertfunc(const std::vector<shared_ptr<Var> > &args) {
+// 変数間の型変換
+BUILTIN(convert) {
   if (args.size() < 2
     || args[1]->vtype != VT_INT) {
     return args[0]->clone();
@@ -509,21 +572,22 @@ shared_ptr<Var> PackageMinosys::convertfunc(const std::vector<shared_ptr<Var> > 
   return make_shared<Var>();
 }
 
-void PackageMinosys::printfunc(const std::vector<shared_ptr<Var> > &args) {
-  int count = 0;
+// print 関数; 表示文字数を返す
+BUILTIN(print) {
+  int count = 0, len = 0;
 
   for (auto p = args.begin(); p != args.end(); ++p) {
     switch ((*p)->vtype) {
     case VT_INT:
-      printf("%d", (*p)->inum);
+      len += printf("%d", (*p)->inum);
       break;
 
     case VT_DNUM:
-      printf("%g", (*p)->dnum);
+      len += printf("%g", (*p)->dnum);
       break;
 
     case VT_STRING:
-      printf("%.*s", (int)(*p)->str.size(), (*p)->str.data());
+      len += printf("%.*s", (int)(*p)->str.size(), (*p)->str.data());
       break;
 
     case VT_INST:
@@ -534,24 +598,30 @@ void PackageMinosys::printfunc(const std::vector<shared_ptr<Var> > &args) {
           vector<shared_ptr<Var> > args;
           shared_ptr<Var> v(r->clone());
           args.push_back(v);
-          printfunc(args);
+          shared_ptr<Var> vr = funcprint(args);
+          if (vr->vtype == VT_INT) {
+            len += vr->inum;
+          }
         }
       }
       break;
 
     case VT_ARRAY:
-      printf("{");
+      len += printf("{");
       for (auto pc = (*p)->arrayhash.begin(); pc != (*p)->arrayhash.end(); ++pc, ++count) {
         if (count) {
-          printf(",");
+          len += printf(",");
         }
         string s = pc->first.toString();
-        printf("%.*s: ", (int)s.size(), s.data());
+        len += printf("%.*s: ", (int)s.size(), s.data());
         vector<shared_ptr<Var> > args;
         args.push_back(pc->second);
-        printfunc(args);
+        shared_ptr<Var> vr = funcprint(args);
+        if (vr->vtype == VT_INT) {
+          len += vr->inum;
+        }
       }
-      printf("}");
+      len += printf("}");
       break;
 
     case VT_FUNC:
@@ -559,9 +629,9 @@ void PackageMinosys::printfunc(const std::vector<shared_ptr<Var> > &args) {
         const string &pac = (*p)->func.first;
         const string &fname = (*p)->func.second;
         if (pac.empty()) {
-          printf("%.*s", (int)fname.size(), fname.data());
+          len += printf("%.*s", (int)fname.size(), fname.data());
         } else {
-          printf("%.*s.%.*s", (int)pac.size(), pac.data(), (int)fname.size(), fname.data());
+          len += printf("%.*s.%.*s", (int)pac.size(), pac.data(), (int)fname.size(), fname.data());
         }
       }
       break;
@@ -570,9 +640,12 @@ void PackageMinosys::printfunc(const std::vector<shared_ptr<Var> > &args) {
       {
         vector<shared_ptr<Var> > args;
         args.push_back((*p)->member.first);
-        printfunc(args);
+        shared_ptr<Var> vr =  funcprint(args);
+        if (vr->vtype == VT_INT) {
+          len += vr->inum;
+        }
         string &mem = (*p)->member.second;
-        printf(".%.*s", (int)mem.size(), mem.data());
+        len += printf(".%.*s", (int)mem.size(), mem.data());
       }
       break;
 
@@ -580,9 +653,11 @@ void PackageMinosys::printfunc(const std::vector<shared_ptr<Var> > &args) {
       ;
     }
   }
+  return make_shared<Var>(len);
 }
 
-void PackageMinosys::exitfunc(const std::vector<shared_ptr<Var> > &args) {
+// 終了関数
+BUILTIN(exit) {
   int code = 0;
   if (!args.empty()) {
     switch ((*args[0]).vtype) {
@@ -601,6 +676,163 @@ void PackageMinosys::exitfunc(const std::vector<shared_ptr<Var> > &args) {
   }
   throw new ExitException(code);
 }
+
+// string: s.at(pos)
+BUILTIN(at) {
+  if (args.size() == 2) {
+    shared_ptr<Var> a2 = args.at(1);
+    int pos = 0;
+    switch (a2->vtype) {
+    case VT_INT:
+      pos = a2->inum;
+      break;
+
+    case VT_DNUM:
+      pos = (int)a2->dnum;
+      break;
+
+    default:
+      throw new RuntimeException(1005, "illegal argument");
+    }
+    shared_ptr<Var> a1 = args.at(0);
+    if (-pos > 0 && -pos <= a1->str.size()) {
+      pos = a1->str.size() + pos;
+    }
+    if (pos >= 0 && pos < a1->str.size()) {
+      return make_shared<Var>(a1->str.substr(pos, 1));
+    }
+    return make_shared<Var>("");
+  }
+  throw new RuntimeException(1005, "illegal argument");
+}
+
+// string: s.empty()
+BUILTIN(empty) {
+  return make_shared<Var>(args.at(0)->str.empty() ? 1 : 0);
+}
+
+// string: s.length()
+BUILTIN(length) {
+  return make_shared<Var>((int)(args.at(0)->str.size()));
+}
+
+// string: s.index(s2, [start])
+BUILTIN(index) {
+  if (args.size() >= 2) {
+    int pos = 0;
+    shared_ptr<Var> a1 = args.at(0);
+    shared_ptr<Var> a2 = args.at(1);
+    if (a2->vtype != VT_STRING) {
+      return make_shared<Var>(-1);
+    }
+    if (args.size() > 2) {
+      shared_ptr<Var> a3 = args.at(2);
+      switch (a3->vtype) {
+      case VT_INT:
+        pos = a3->inum;
+        break;
+
+      case VT_DNUM:
+        pos = (int)a3->dnum;
+        break;
+
+      default:
+        return make_shared<Var>(-1);
+      }
+    }
+    if (-pos > 0 && -pos <= a1->str.size()) {
+      pos = a1->str.size() + pos;
+    }
+    if (pos >= 0 && pos < a1->str.size()) {
+      return make_shared<Var>((int)a1->str.find(a2->str, pos));
+    }
+  }
+  return make_shared<Var>(-1);
+}
+
+// string: s.rindex(s2, [start])
+BUILTIN(rindex) {
+  if (args.size() >= 2) {
+    int pos = 0;
+    shared_ptr<Var> a1 = args.at(0);
+    shared_ptr<Var> a2 = args.at(1);
+    if (a2->vtype != VT_STRING) {
+      return make_shared<Var>(-1);
+    }
+    if (args.size() > 2) {
+      shared_ptr<Var> a3 = args.at(2);
+      switch (a3->vtype) {
+      case VT_INT:
+        pos = a3->inum;
+        break;
+
+      case VT_DNUM:
+        pos = (int)a3->dnum;
+        break;
+
+      default:
+        return make_shared<Var>(-1);
+      }
+    }
+    if (-pos > 0 && -pos <= a1->str.size()) {
+      pos = a1->str.size() + pos;
+    }
+    if (pos >= 0 && pos < a1->str.size()) {
+      return make_shared<Var>((int)a1->str.rfind(a2->str, pos));
+    }
+  }
+  return make_shared<Var>(-1);
+}
+
+// string s.substr(start, [size])
+BUILTIN(substr) {
+  if (args.size() >= 2) {
+    shared_ptr<Var> a1 = args.at(0);
+    shared_ptr<Var> a2 = args.at(1);
+    int start = 0, width = a1->str.size();
+    switch (a2->vtype) {
+    case VT_INT:
+      start = a2->inum;
+      break;
+
+    case VT_DNUM:
+      start = (int)a2->dnum;
+      break;
+
+    default:
+      return a1;
+    }
+
+    if (args.size() > 2) {
+      shared_ptr<Var> a3 = args.at(2);
+      switch (a3->vtype) {
+      case VT_INT:
+        width = a3->inum;
+        break;
+
+      case VT_DNUM:
+        width = (int)a3->dnum;
+        break;
+
+      default:
+        return a1;
+      }
+    }
+    if (width < 0) {
+      width = a1->str.size();
+    }
+
+    if (-start > 0 && -start <= a1->str.size()) {
+      start = a1->str.size() + start;
+    }
+    if (start + width > a1->str.size()) {
+      width = a1->str.size() - start;
+    }
+    return make_shared<Var>(a1->str.substr(start, width));
+  }
+  return args.at(0);
+}
+
 
 PackageDlopen::~PackageDlopen() {
   dlclose(dlhandle);
@@ -721,7 +953,7 @@ bool Engine::analyzePackage(const string &pacname, bool current) {
       void *st = dlsym(d, "start");
       if (st) {
         // binary package を発見
-        shared_ptr<PackageDlopen> pd(new PackageDlopen());
+        shared_ptr<PackageDlopen> pd = make_shared<PackageDlopen>();
         pd->ptype = PackageBase::PT_DLOPEN;
         pd->name = pacname;
         pd->path = pt;
@@ -742,7 +974,7 @@ bool Engine::analyzePackage(const string &pacname, bool current) {
       if (top->yylex(&lexf)) {
         fclose(f);
         // minosys script を発見
-        shared_ptr<PackageMinosys> pm(new PackageMinosys());
+        shared_ptr<PackageMinosys> pm = make_shared<PackageMinosys>();
         pm->ptype = PackageBase::PT_MINOSYS;
         pm->name = pacname;
         pm->path = pt;
@@ -768,6 +1000,7 @@ shared_ptr<Var> Engine::start(const string &pname, const string &fname, vector<s
   if (p != packages.end()) {
     // カレントパッケージ名を設定する
     string prevPackageName = this->currentPackageName;
+    this->currentPackageName = pname;
 
     // パッケージ関数呼び出し
     shared_ptr<Var> r = p->second->start(fname, args);

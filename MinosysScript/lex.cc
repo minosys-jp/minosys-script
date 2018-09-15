@@ -439,8 +439,8 @@ LexBase::LexTag LexBase::analyze() {
       } else {
         token = "<<";
         this->ungetc(c);
+        this->state = 0;
       }
-      this->state = 0;
       return LT_OP;
 
     case 110:

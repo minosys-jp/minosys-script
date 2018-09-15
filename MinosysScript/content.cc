@@ -400,20 +400,35 @@ Content *ContentTop::yylex_eval3(LexBase *lex) {
   while (getContentToken(token, lex) >= 0) {
     if (token.tag != LexBase::LT_OP) {
       listContent.push_back(token);
-      break;
+      return c1;
     }
     if (token.token == "[") {
-      Content *c2 = yylex_eval(lex);
-      if (getContentToken(token, lex) < 0) break;
-      if (token.tag != LexBase::LT_OP || token.token != "]") {
-        listContent.push_back(token);
-        break;
+cout << "enter []" << endl;
+      bool br = false;
+      listContent.push_back(token);
+      while (getContentToken(token, lex) >= 0) {
+        if (token.tag != LexBase::LT_OP || token.token != "[") {
+          br = true;
+          listContent.push_back(token);
+          break;
+        }
+        Content *c2 = yylex_eval(lex);
+        if (getContentToken(token, lex) < 0) {
+          br = true;
+          break;
+        }
+        if (token.tag != LexBase::LT_OP || token.token != "]") {
+          br = true;
+          listContent.push_back(token);
+          break;
+        }
+        if (!t) {
+          t = new Content(LexBase::LT_OP, "[");
+          t->pc.push_back(c1);
+        }
+        t->pc.push_back(c2);
       }
-      if (!t) {
-        t = new Content(LexBase::LT_OP, "[");
-        t->pc.push_back(c1);
-      }
-      t->pc.push_back(c2);
+      if (br) break;
     } else if (token.token == "(") {
       listContent.push_back(token);
       t = new Content(LexBase::LT_FUNC, "");
@@ -422,6 +437,16 @@ Content *ContentTop::yylex_eval3(LexBase *lex) {
         delete t;
         return NULL;
       }
+      c1 = t;
+      t = nullptr;
+    } else if (token.token == ".") {
+      // a.b().c() 等のケースを配慮する
+cout << "after function/array" << endl;
+      t = new Content(token.tag, token.token);
+      t->pc.push_back(c1);
+      t->pc.push_back(yylex_mono(lex));
+      c1 = t;
+      t = nullptr;
     } else {
       listContent.push_back(token);
       break;
@@ -579,10 +604,20 @@ Content *ContentTop::yylex_lhs(LexBase *lex) {
 
 Content *ContentTop::yylex_rhs(LexBase *lex) {
   ContentToken token;
-  Content *c1 = yylex_shift(lex);
+  Content *c1 = yylex_comp(lex);
 
   if (getContentToken(token, lex) < 0) return c1;
   if (token.tag == LexBase::LT_OP) {
+    if (token.token == ".") {
+      // (c1 + c2).b のようなケースを拾い上げる
+      Content *c2 = yylex_mono(lex);
+      if (c2) {
+        Content *t = new Content(LexBase::LT_OP, token.token);
+        t->pc.push_back(c1);
+        t->pc.push_back(c2);
+        return t;
+      }
+    }
     if (token.token == "&" || token.token == "|"
       || token.token == "^" || token.token == "&&"
       || token.token == "||") {
@@ -604,26 +639,6 @@ Content *ContentTop::yylex_rhs(LexBase *lex) {
 Content *ContentTop::yylex_rhs2(Content *c, LexBase *lex) {
   this->savedLHS = c;
   return yylex_rhs(lex);
-}
-
-Content *ContentTop::yylex_shift(LexBase *lex) {
-  ContentToken token;
-  Content *c1 = yylex_comp(lex);
-
-  if (getContentToken(token, lex) < 0) return c1;
-  if (token.tag == LexBase::LT_OP) {
-    if (token.token == "<<" || token.token == ">>") {
-      Content *c2 = yylex_eval(lex);
-      if (c2) {
-        Content *t = new Content(LexBase::LT_OP, token.token);
-        t->pc.push_back(c1);
-        t->pc.push_back(c2);
-        return t;
-      }
-    }
-  }
-  listContent.push_back(token);
-  return c1;
 }
 
 Content *ContentTop::yylex_comp(LexBase *lex) {

@@ -128,8 +128,10 @@ class PackageMinosys : public PackageBase {
    std::shared_ptr<Var> eval_func(Content *c);
    std::shared_ptr<Var> eval_op(Content *c);
 
+   std::unordered_map<std::string, std::function<std::shared_ptr<Var>(PackageMinosys *, Content *)> > opmap;
 #define OP(x) std::shared_ptr<Var> eval_op_##x(Content *c);
 
+   OP(dot);
    OP(3term);
    OP(monoNot);
    OP(negate);
@@ -167,21 +169,35 @@ class PackageMinosys : public PackageBase {
    OP(xor);
    OP(lsh);
    OP(rsh);
+   OP(leftarray);
 
    std::shared_ptr<Var>& createVar(const std::string &vname, std::vector<Content *> &pc);
    std::shared_ptr<Var>* createVarIndex(const VarKey &key, std::shared_ptr<Var> *pv);
-   std::shared_ptr<Var>& searchVarIndex(const VarKey &key, std::shared_ptr<Var> &v);
    std::string createMulString(int count, const std::string &s);
 
  public:
    ContentTop *top;
    std::shared_ptr<Var> start(const std::string &fname, std::vector<std::shared_ptr<Var> > &args);
-   std::shared_ptr<Var> typefunc(const std::vector<std::shared_ptr<Var> > &args);
-   std::shared_ptr<Var> convertfunc(const std::vector<std::shared_ptr<Var> > &args);
-   void printfunc(const std::vector<std::shared_ptr<Var> > &args);
-   void exitfunc(const std::vector<std::shared_ptr<Var> > &args);
+
+   std::unordered_map<std::string, std::function<std::shared_ptr<Var>(PackageMinosys *, std::vector<std::shared_ptr<Var> >)> > builtinmap;
+   std::unordered_map<std::string, std::function<std::shared_ptr<Var>(PackageMinosys *, std::vector<std::shared_ptr<Var> >)> > stringmap;
+
+#define BUILTIN(bb) std::shared_ptr<Var> func##bb (const std::vector<std::shared_ptr<Var> > &args)
+   BUILTIN(type);
+   BUILTIN(convert);
+   BUILTIN(print);
+   BUILTIN(exit);
+
+   BUILTIN(empty);
+   BUILTIN(length);
+   BUILTIN(at);
+   BUILTIN(index);
+   BUILTIN(rindex);
+   BUILTIN(substr);
+
    std::shared_ptr<Var> callfunc(const std::string &fname, Content *c);
    std::shared_ptr<Var> evaluate(Content *c);
+   PackageMinosys();
    ~PackageMinosys();
 };
 

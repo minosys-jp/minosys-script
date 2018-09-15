@@ -44,14 +44,55 @@ shared_ptr<Var> PackageMinosys::evaluate(Content *c) {
 
 // 変数値の評価
 shared_ptr<Var> PackageMinosys::eval_var(Content *c) {
-  return eng->searchVar(c->op);
+  shared_ptr<Var> v = eng->searchVar(c->op);
+  for (auto p = c->pc.begin(); p != c->pc.end(); ++p) {
+    if (v->vtype == VT_ARRAY) {
+      shared_ptr<Var> a = evaluate(*p);
+      switch(a->vtype) {
+      case VT_INT:
+        {
+          VarKey vk(a->inum);
+          auto pv = v->arrayhash.find(vk);
+          if (pv != v->arrayhash.end()) {
+            v = pv->second;
+          }
+        }
+        break;
+
+      case VT_DNUM:
+        {
+          VarKey vk(a->dnum);
+          auto pv = v->arrayhash.find(vk);
+          if (pv != v->arrayhash.end()) {
+            v = pv->second;
+          }
+        }
+        break;
+
+      case VT_STRING:
+        {
+          VarKey vk(a->str);
+          auto pv = v->arrayhash.find(vk);
+          if (pv != v->arrayhash.end()) {
+            v = pv->second;
+          }
+        }
+        break;
+
+      default:
+        return v;
+      }
+    } else {
+      break;
+    }
+  }
+  return v;
 }
 
 // 関数名の評価
 // 実際の関数呼び出しは eval_func で行われる
-// また、一般には "." 演算子でパッケージ名と結合されることに注意
 shared_ptr<Var> PackageMinosys::eval_functag(Content *c) {
-  pair<string, string> func("", c->op);
+  pair<string, string> func(eng->currentPackageName, c->op);
   return make_shared<Var>(func);
 }
 
@@ -59,17 +100,26 @@ shared_ptr<Var> PackageMinosys::eval_functag(Content *c) {
 shared_ptr<Var> PackageMinosys::eval_func(Content *c) {
   // [0]: 関数名
   shared_ptr<Var> func = evaluate(c->pc.at(0));
-
-  // [1~]: 引数
   vector<shared_ptr<Var> > args;
-  for (int i = 1; i < c->pc.size(); i++) {
-    args.push_back(evaluate(c->pc.at(i)));
-  }
 
   // パッケージ名の抽出
-  // TODO: メンバーの場合の抽出処理
-  if (func->vtype != VT_FUNC) {
+  if (func->vtype == VT_MEMBER) {
+    switch (func->member.first->vtype) {
+    case VT_INST:
+      // TODO: メンバーの場合の抽出処理
+      break;
+    case VT_STRING:
+      // S.func() は func(S, ...) と呼び出される
+      args.push_back(func->member.first);
+      func = make_shared<Var>(pair<string, string>("", func->member.second));
+    }
+  } else if (func->vtype != VT_FUNC) {
     throw RuntimeException(1000, "Function calls non-function");
+  }
+
+  // [1~]: 引数
+  for (int i = 1; i < c->pc.size(); i++) {
+    args.push_back(evaluate(c->pc.at(i)));
   }
 
   string pname;
@@ -87,123 +137,82 @@ shared_ptr<Var> PackageMinosys::eval_func(Content *c) {
   shared_ptr<PackageBase> base = found->second;
 
   // 関数呼び出しおよび結果の返却
-  return base->start(func->func.second, args);
+  string oldpname = eng->currentPackageName;
+  eng->currentPackageName = pname;
+  shared_ptr<Var> r = base->start(func->func.second, args);
+  eng->currentPackageName = oldpname;
+  return r;
 }
 
 // 演算子の評価
 shared_ptr<Var> PackageMinosys::eval_op(Content *c) {
-  if (c->op == "?") {
-    return eval_op_3term(c);
-  }
-  if (c->op == "=") {
-    return eval_op_assign(c);
-  }
-  if (c->op == "+=") {
-    return eval_op_assignplus(c);
-  }
-  if (c->op == "*=") {
-    return eval_op_assignmultiply(c);
-  }
-  if (c->op == "-=") {
-    return eval_op_assignminus(c);
-  }
-  if (c->op == "/=") {
-    return eval_op_assigndiv(c);
-  }
-  if (c->op == "%=") {
-    return eval_op_assignmod(c);
-  }
-  if (c->op == "&=") {
-    return eval_op_assignand(c);
-  }
-  if (c->op == "|=") {
-    return eval_op_assignor(c);
-  }
-  if (c->op == "^=") {
-    return eval_op_assignxor(c);
-  }
-  if (c->op == "<<=") {
-    return eval_op_assignlsh(c);
-  }
-  if (c->op == ">>=") {
-    return eval_op_assignrsh(c);
-  }
-  if (c->op == "!") {
-    return eval_op_monoNot(c);
-  }
-  if (c->op == "~") {
-    return eval_op_negate(c);
-  }
-  if (c->op == "-m") {
-    return eval_op_monoMinus(c);
-  }
-  if (c->op == "++x") {
-    return eval_op_preIncr(c);
-  }
-  if (c->op == "x++") {
-    return eval_op_postIncr(c);
-  }
-  if (c->op == "--x") {
-    return eval_op_preDecr(c);
-  }
-  if (c->op == "x--") {
-    return eval_op_postDecr(c);
-  }
-  if (c->op == "<") {
-    return eval_op_lt(c);
-  }
-  if (c->op == "<=") {
-    return eval_op_lteq(c);
-  }
-  if (c->op == ">") {
-    return eval_op_gt(c);
-  }
-  if (c->op == ">=") {
-    return eval_op_gteq(c);
-  }
-  if (c->op == "!=") {
-    return eval_op_neq(c);
-  }
-  if (c->op == "==") {
-    return eval_op_eq(c);
-  }
-  if (c->op == "+") {
-    return eval_op_plus(c);
-  }
-  if (c->op == "-") {
-    return eval_op_minus(c);
-  }
-  if (c->op == "*") {
-    return eval_op_multiply(c);
-  }
-  if (c->op == "/") {
-    return eval_op_div(c);
-  }
-  if (c->op == "%") {
-    return eval_op_mod(c);
-  }
-  if (c->op == "&") {
-    return eval_op_and(c);
-  }
-  if (c->op == "|") {
-    return eval_op_or(c);
-  }
-  if (c->op == "^") {
-    return eval_op_xor(c);
-  }
-  if (c->op == "&&") {
-    return eval_op_logand(c);
-  }
-  if (c->op == "||") {
-    return eval_op_logor(c);
-  }
-  if (c->op == "<<") {
-    return eval_op_lsh(c);
-  }
-  if (c->op == ">>") {
-    return eval_op_rsh(c);
+  auto p = opmap.find(c->op);
+  if (p != opmap.end()) {
+    return (p->second)(this, c);
   }
   throw RuntimeException(1002, string("operator not defined:") + c->op);
+}
+
+// ドット演算子
+shared_ptr<Var> PackageMinosys::eval_op_dot(Content *c) {
+  // TODO: LT_VAR の場合はインスタンスであることを確認する
+  // ここでは [package|eval].func という形式のみ考慮する
+  Content *pac = c->pc.at(0);
+  Content *fname = c->pc.at(1);
+  if (pac->tag == LexBase::LT_TAG && fname->tag == LexBase::LT_TAG) {
+    return make_shared<Var>(pair<string, string>(pac->op, fname->op));
+  }
+  shared_ptr<Var> vp = evaluate(c->pc.at(0));
+  if (fname->tag == LexBase::LT_TAG) {
+    return make_shared<Var>(pair<shared_ptr<Var>, string>(vp, fname->op));
+  }
+  throw new RuntimeException(1004, "illegal format for package or function");
+}
+
+// 左 array 演算子
+shared_ptr<Var> PackageMinosys::eval_op_leftarray(Content *c) {
+  shared_ptr<Var> v = evaluate(c->pc.at(0));
+  for (int i = 1; i < c->pc.size(); ++i) {
+    if (v->vtype != VT_ARRAY) {
+      break;
+    }
+    shared_ptr<Var> a = evaluate(c->pc.at(i));
+    switch (a->vtype) {
+    case VT_INT:
+      {
+        VarKey vk(a->inum);
+        auto p = v->arrayhash.find(vk);
+        if (p != v->arrayhash.end()) {
+          v = p->second;
+        }
+      }
+      break;
+
+    case VT_DNUM:
+      {
+        VarKey vk(a->dnum);
+        auto p = v->arrayhash.find(vk);
+        if (p != v->arrayhash.end()) {
+          v = p->second;
+        }
+      }
+      break;
+
+    case VT_STRING:
+      {
+        VarKey vk(a->str);
+        auto p = v->arrayhash.find(vk);
+        if (p != v->arrayhash.end()) {
+          v = p->second;
+        }
+      }
+      break;
+
+    default:
+      return v;
+    }
+  }
+  return v;
 }
 
 // 3項演算子
@@ -252,34 +261,34 @@ shared_ptr<Var> PackageMinosys::eval_op_monoMinus(Content *c) {
 
 // 配列を考慮して変数を作成する
 shared_ptr<Var> &PackageMinosys::createVar(const string &vname, vector<Content *> &pc) {
-  shared_ptr<Var> &v = eng->searchVar(vname, true);
+  shared_ptr<Var> *pv = &eng->searchVar(vname, true);
 
   if (!pc.empty()) {
     for (int i = 0; i < pc.size(); i++) {
-      if (v->vtype != VT_ARRAY) {
+      if ((*pv)->vtype != VT_ARRAY) {
         // 配列でなければ配列化する
-        v->vtype = VT_ARRAY;
+        (*pv)->vtype = VT_ARRAY;
       }
       shared_ptr<Var> idx = evaluate(pc.at(i));
       switch (idx->vtype) {
       case VT_INT:
         {
           VarKey key(idx->inum);
-          v = createVarIndex(key, v);
+          pv = createVarIndex(key, pv);
         }
         break;
 
       case VT_DNUM:
         {
           VarKey key(idx->dnum);
-          v = createVarIndex(key, v);
+          pv = createVarIndex(key, pv);
         }
         break;
 
       case VT_STRING:
         {
           VarKey key(idx->str);
-          v = createVarIndex(key, v);
+          pv = createVarIndex(key, pv);
         }
         break;
 
@@ -288,21 +297,20 @@ shared_ptr<Var> &PackageMinosys::createVar(const string &vname, vector<Content *
       }
     }
   }
-  return v;
+  return *pv;
 }
 
 // 配列要素を検索する。なければ作成する
-shared_ptr<Var> &PackageMinosys::createVarIndex(const VarKey &key, shared_ptr<Var> &v) {
-  auto p = v->arrayhash.find(key);
-  if (p != v->arrayhash.end()) {
+shared_ptr<Var> *PackageMinosys::createVarIndex(const VarKey &key, shared_ptr<Var> *pv) {
+  auto p = (*pv)->arrayhash.find(key);
+  if (p != (*pv)->arrayhash.end()) {
     // 配列要素が見つかったので v を置き換える
-    v = p->second;
+    return &(p->second);
   } else {
     // 配列要素が見つからなかったので、作成する
-    v->arrayhash[key] = make_shared<Var>();
-    v = v->arrayhash[key];
+    (*pv)->arrayhash[key] = make_shared<Var>();
+    return &((*pv)->arrayhash[key]);
   }
-  return v;
 }
 
 // 代入演算子の評価
